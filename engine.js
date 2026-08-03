@@ -23,8 +23,10 @@ const state = {
 let obstacles = [];  // {z, lane, type}  type: 'log'|'bar'|'wall'
 let coinsArr = [];   // {z, lane, y}
 let decos = [];      // side decorations {z, side, kind}
+let throwsArr = [];  // 추격자가 던진 휴지 {z, lane, age, y}
 let nextSpawnZ = 30;
 let nextDecoZ = 2;
+let nextThrowT = 3;  // 다음 휴지 투척 시각 (state.t 기준)
 
 // ---------- 리셋 / 스폰 ----------
 function reset() {
@@ -32,8 +34,8 @@ function reset() {
   state.lane = 1; state.laneX = 0; state.y = 0; state.vy = 0;
   state.jumping = false; state.jumps = 0; state.sliding = 0; state.dead = false;
   state.shake = 0; state.deadT = 0;
-  obstacles = []; coinsArr = []; decos = [];
-  nextSpawnZ = 30; nextDecoZ = 2;
+  obstacles = []; coinsArr = []; decos = []; throwsArr = [];
+  nextSpawnZ = 30; nextDecoZ = 2; nextThrowT = 3;
   for (let z = 2; z < DRAW_FAR; z += 2.2) spawnDeco(z);
   nextDecoZ = DRAW_FAR;
 }
@@ -120,6 +122,7 @@ window.addEventListener('touchend', e => {
 function startPlay() {
   state.mode = 'play';
   state.running = true;
+  nextThrowT = state.t + 4; // 게임 시작 직후엔 던지지 않도록 여유
 }
 function updateIntro(dt) {
   state.t += dt;
@@ -193,6 +196,24 @@ function update(dt) {
       c.got = true; state.coins++; sfx.coin();
     }
   }
+
+  // 추격자의 휴지 투척! 플레이어 차선을 노리고 뒤에서 굴러온다 (점프/차선 변경으로 회피)
+  if (state.t > nextThrowT) {
+    nextThrowT = state.t + Math.max(2.2, 5.5 - state.t * 0.03) + Math.random() * 2;
+    throwsArr.push({ z: -0.9, lane: state.lane, age: 0, y: 0 });
+    sfx.throw();
+  }
+  for (const th of throwsArr) {
+    th.age += dt;
+    th.z += 3.5 * dt; // 플레이어 기준 상대 속도로 전진
+    th.y = Math.abs(Math.sin(th.age * 9)) * Math.max(0, 0.45 - th.age * 0.22); // 통통 튀며 굴러옴
+    if (th.z > PLAYER_Z - 0.5 && th.z < PLAYER_Z + 0.5 &&
+        Math.abs(LANE_X[th.lane] - state.laneX) < 0.5 && state.y < 0.3) {
+      die(); return;
+    }
+  }
+  throwsArr = throwsArr.filter(th => th.z < 14);
+
   updateHUD(state.dist, state.coins);
 }
 

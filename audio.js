@@ -27,6 +27,7 @@ const sfx = {
   jump: () => beep(300, 0.22, 'sine', 0.16, 320),
   jump2: () => beep(430, 0.2, 'sine', 0.16, 380),
   slide: () => beep(220, 0.18, 'sawtooth', 0.07, -80),
+  throw: () => beep(950, 0.28, 'sawtooth', 0.06, -600),
   lane: () => beep(500, 0.06, 'triangle', 0.08),
   crash: () => { beep(140, 0.4, 'sawtooth', 0.22, -90); beep(90, 0.55, 'square', 0.18, -50); },
 };

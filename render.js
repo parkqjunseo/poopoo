@@ -511,6 +511,46 @@ function drawCrowdFront(x, y, u, i) {
   ctx.restore();
 }
 
+// ---------- 던져진 휴지 (뒤에서 굴러오는 방해물) ----------
+function drawThrownRoll(th) {
+  const gp = screenPos(LANE_X[th.lane], th.z, 0);
+  const p = screenPos(LANE_X[th.lane], th.z, th.y + 0.05);
+  const s = p.f * Math.min(W, H) * 0.055;
+  if (s < 2) return;
+  // ground shadow
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.beginPath(); ctx.ellipse(gp.x, gp.y, s * 0.9, s * 0.28, 0, 0, 7); ctx.fill();
+  // unrolling paper strip trailing behind
+  ctx.strokeStyle = 'rgba(247,250,252,.9)'; ctx.lineWidth = s * 0.35; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y + s * 0.2);
+  ctx.quadraticCurveTo(p.x - s * 0.8, p.y + s * (1.1 + 0.15 * Math.sin(state.t * 13)),
+                       p.x - s * 1.6, p.y + s * (2.0 + 0.3 * Math.sin(state.t * 9)));
+  ctx.stroke();
+  // spinning roll
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate((th.age * 16) % (Math.PI * 2));
+  ctx.fillStyle = '#f7fafc';
+  ctx.beginPath(); ctx.arc(0, 0, s, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#cdd6dc'; ctx.lineWidth = s * 0.1;
+  ctx.beginPath(); ctx.arc(0, 0, s, 0, 7); ctx.stroke();
+  ctx.fillStyle = '#aeb9c0';
+  ctx.beginPath(); ctx.arc(0, 0, s * 0.35, 0, 7); ctx.fill();
+  ctx.fillStyle = '#8b989f';
+  ctx.beginPath(); ctx.arc(0, 0, s * 0.18, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(180,195,205,.8)'; ctx.lineWidth = s * 0.08;
+  ctx.beginPath(); ctx.moveTo(s * 0.4, 0); ctx.lineTo(s * 0.85, 0); ctx.stroke();
+  ctx.restore();
+  // warning "!" while it's still behind the player
+  if (th.z < PLAYER_Z - 0.6) {
+    ctx.fillStyle = '#ff5d5d';
+    ctx.font = `900 ${s * 1.1}px 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('!', p.x, p.y - s * 1.2);
+  }
+}
+
 // ---------- 추격자들 (게임 중, 뒷모습) ----------
 function drawChasers() {
   const catchUp = state.dead ? Math.min(1, state.deadT * 1.4) : 0;
@@ -599,6 +639,7 @@ function render() {
     ...decos.map(d => ({ z: d.z, fn: () => drawDeco(d) })),
     ...obstacles.map(o => ({ z: o.z, fn: () => drawObstacle(o) })),
     ...coinsArr.filter(c => !c.got).map(c => ({ z: c.z, fn: () => drawCoin(c) })),
+    ...throwsArr.map(th => ({ z: th.z, fn: () => drawThrownRoll(th) })),
     { z: PLAYER_Z, fn: drawPlayer },
   ].sort((a, b) => b.z - a.z);
   for (const d of drawables) d.fn();
