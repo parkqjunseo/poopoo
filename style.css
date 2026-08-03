@@ -1,0 +1,72 @@
+/* ============================================
+   style.css — 🎨 A담당 (디자인/연출)
+   HUD, 시작/게임오버 오버레이, 타이포, 버튼
+   ⚠️ ID/클래스 이름은 ui.js가 참조하므로 rename 금지:
+      #hud #scoreBox #coinBox #overlay #ovMsg #ovStats #ovBest #startBtn .hidden
+   ============================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #1a120b; touch-action: none; }
+#wrap { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+canvas { display: block; background: #000; max-width: 100%; max-height: 100%; }
+#hud {
+  position: absolute; top: 0; left: 0; right: 0; padding: 14px 20px;
+  display: flex; justify-content: space-between; pointer-events: none;
+  font-family: 'Segoe UI', sans-serif; color: #ffe9b0;
+  text-shadow: 0 2px 4px rgba(0,0,0,.8); font-weight: 700;
+}
+#hud .box { font-size: clamp(16px, 3vw, 26px); }
+#overlay {
+  position: absolute; inset: 0; display: flex;
+  align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 38%, rgba(34,44,20,.42), rgba(6,10,3,.85));
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: #ffe9b0; text-align: center; padding: 20px;
+}
+.panel {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: clamp(22px, 4.5vw, 38px) clamp(26px, 6vw, 56px);
+  background: linear-gradient(180deg, #fffdf4 0%, #ffeecd 100%);
+  border: 5px solid #6e4a21; border-radius: 36px;
+  box-shadow: 0 12px 0 rgba(74, 48, 18, .55), 0 34px 70px rgba(0, 0, 0, .5);
+  max-width: min(92vw, 640px); color: #5b3d16;
+}
+.logo {
+  font-size: clamp(46px, 10vw, 84px); line-height: 1;
+  animation: bob 1.4s ease-in-out infinite;
+  filter: drop-shadow(0 8px 10px rgba(90, 60, 20, .35));
+}
+@keyframes bob { 50% { transform: translateY(-10px) rotate(-4deg); } }
+#overlay h1 {
+  font-size: clamp(38px, 8.5vw, 72px); font-weight: 900; letter-spacing: 2px; line-height: 1.05;
+  color: #6e4a21; transform: rotate(-2deg);
+  text-shadow: 3px 3px 0 #ffd45a, 6px 6px 0 rgba(110, 74, 33, .22);
+}
+.tagline {
+  font-size: clamp(13px, 2.6vw, 18px); font-weight: 800; letter-spacing: 1px;
+  color: #fff; background: linear-gradient(#f36a5f, #d84338);
+  padding: 7px 20px; border-radius: 999px;
+  box-shadow: 0 3px 0 #a52c22, inset 0 1px 0 rgba(255,255,255,.4);
+}
+#overlay p { font-size: clamp(13px, 2.2vw, 17px); line-height: 1.75; color: #6b512c; }
+.keys { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.key {
+  padding: 6px 13px; border-radius: 12px; background: #fff;
+  border: 2px solid #dfc79c; color: #5b3d16;
+  font-size: clamp(12px, 2vw, 14px); font-weight: 700;
+  box-shadow: 0 3px 0 #dfc79c;
+}
+#overlay .stats { font-size: clamp(17px, 3.3vw, 24px); color: #4a3010; line-height: 1.6; font-weight: 600; }
+.best { font-weight: 800; color: #b0793f; font-size: clamp(14px, 2.6vw, 18px); }
+#overlay button {
+  pointer-events: auto; cursor: pointer; border: none; border-radius: 999px;
+  padding: 16px 54px; font-size: clamp(18px, 3.2vw, 24px); font-weight: 900; letter-spacing: 1px;
+  color: #fff; text-shadow: 0 2px 3px rgba(0, 90, 20, .45);
+  background: linear-gradient(180deg, #8ede63, #46b03a);
+  box-shadow: 0 7px 0 #2e7d27, 0 14px 26px rgba(30, 80, 20, .35), inset 0 2px 0 rgba(255,255,255,.55);
+  font-family: inherit; animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse { 50% { transform: scale(1.05); } }
+#overlay button:active { transform: translateY(5px); box-shadow: 0 2px 0 #2e7d27; animation: none; }
+.hint { font-size: 12px; color: #9a7f52; }
+.hidden { display: none !important; }
