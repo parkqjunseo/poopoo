@@ -76,11 +76,25 @@ function spawnPattern(z) {
 }
 
 // ---------- 입력 ----------
-function moveLane(d) {
-  if (!state.running || state.dead) return;
-  const nl = Math.min(2, Math.max(0, state.lane + d));
-  if (nl !== state.lane) { state.lane = nl; sfx.lane(); }
+// 자유 좌우 이동: 방향키 홀드(PC) / 폰 기울이기(모바일)
+const MOVE_SPEED = 3.2;   // 좌우 이동 속도 (lane 단위/초)
+const EDGE_X = 1.25;      // 산책로 밖으로 못 나가는 한계
+const held = { left: false, right: false };
+let tiltX = null;         // 기울기 목표 위치 (활성화 전엔 null)
+let tiltReady = false;
+
+window.addEventListener('deviceorientation', e => {
+  if (typeof e.gamma !== 'number') return;
+  if (!tiltReady && Math.abs(e.gamma) > 0.5) tiltReady = true; // 실제 기울기 감지 후 활성화
+  if (tiltReady) tiltX = Math.max(-EDGE_X, Math.min(EDGE_X, e.gamma / 18));
+});
+// iOS는 사용자 제스처에서 권한 요청 필요 — ui.js의 시작 버튼에서 호출
+function requestTilt() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+    DeviceOrientationEvent.requestPermission().catch(() => {});
+  }
 }
+
 function doJump() {
   if (!state.running || state.dead) return;
   if (!state.jumping) {
@@ -98,11 +112,16 @@ window.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
   if (state.mode === 'intro') { startPlay(); return; }
   if (!state.running && (e.key === ' ' || e.key === 'Enter')) { startBtn.click(); return; }
-  if (e.key === 'ArrowLeft' || e.key === 'a') moveLane(-1);
-  else if (e.key === 'ArrowRight' || e.key === 'd') moveLane(1);
+  if (e.key === 'ArrowLeft' || e.key === 'a') { if (!e.repeat && !held.left) sfx.lane(); held.left = true; }
+  else if (e.key === 'ArrowRight' || e.key === 'd') { if (!e.repeat && !held.right) sfx.lane(); held.right = true; }
   else if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'w') doJump();
   else if (e.key === 'ArrowDown' || e.key === 's') doSlide();
 });
+window.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft' || e.key === 'a') held.left = false;
+  else if (e.key === 'ArrowRight' || e.key === 'd') held.right = false;
+});
+window.addEventListener('blur', () => { held.left = held.right = false; });
 let tsx = 0, tsy = 0, tst = 0;
 window.addEventListener('touchstart', e => {
   const t = e.touches[0]; tsx = t.clientX; tsy = t.clientY; tst = performance.now();
@@ -114,8 +133,11 @@ window.addEventListener('touchend', e => {
   const dx = t.clientX - tsx, dy = t.clientY - tsy;
   if (performance.now() - tst > 600) return;
   if (Math.abs(dx) < 24 && Math.abs(dy) < 24) { doJump(); return; }
-  if (Math.abs(dx) > Math.abs(dy)) moveLane(dx > 0 ? 1 : -1);
-  else (dy < 0 ? doJump() : doSlide());
+  if (Math.abs(dx) > Math.abs(dy)) {
+    // 기울이기가 기본이지만, 좌우 스와이프로도 살짝 이동 가능 (보조)
+    state.laneX = Math.max(-EDGE_X, Math.min(EDGE_X, state.laneX + (dx > 0 ? 0.8 : -0.8)));
+    sfx.lane();
+  } else (dy < 0 ? doJump() : doSlide());
 }, { passive: true });
 
 // ---------- 상태머신 / 업데이트 ----------
@@ -152,9 +174,13 @@ function update(dt) {
   const dz = state.speed * dt;
   state.dist += dz;
 
-  // lane smoothing
-  const target = LANE_X[state.lane];
-  state.laneX += (target - state.laneX) * Math.min(1, dt * 12);
+  // 자유 좌우 이동 — 방향키 홀드가 우선, 없으면 기울기 따라감
+  if (held.left) state.laneX -= MOVE_SPEED * dt;
+  if (held.right) state.laneX += MOVE_SPEED * dt;
+  if (!held.left && !held.right && tiltX !== null) {
+    state.laneX += (tiltX - state.laneX) * Math.min(1, dt * 8);
+  }
+  state.laneX = Math.max(-EDGE_X, Math.min(EDGE_X, state.laneX));
 
   // jump physics
   if (state.jumping) {
@@ -200,7 +226,7 @@ function update(dt) {
   // 추격자의 휴지 투척! 플레이어 차선을 노리고 뒤에서 굴러온다 (점프/차선 변경으로 회피)
   if (state.t > nextThrowT) {
     nextThrowT = state.t + Math.max(2.2, 5.5 - state.t * 0.03) + Math.random() * 2;
-    throwsArr.push({ z: -0.9, lane: state.lane, age: 0, y: 0 });
+    throwsArr.push({ z: -0.9, lane: Math.max(0, Math.min(2, Math.round(state.laneX) + 1)), age: 0, y: 0 });
     sfx.throw();
   }
   for (const th of throwsArr) {
