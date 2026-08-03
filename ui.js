@@ -38,7 +38,6 @@ ovBest.textContent = state.best ? `🏆 최고 기록 ${state.best} m` : '';
 
 startBtn.addEventListener('click', () => {
   audio();
-  requestTilt(); // iOS 기울기 센서 권한 (사용자 제스처 필요)
   reset();
   state.mode = 'intro';
   state.introT = 0;
