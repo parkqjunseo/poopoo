@@ -29,5 +29,6 @@ const sfx = {
   slide: () => beep(220, 0.18, 'sawtooth', 0.07, -80),
   throw: () => beep(950, 0.28, 'sawtooth', 0.06, -600),
   lane: () => beep(500, 0.06, 'triangle', 0.08),
+  hurt: () => { beep(320, 0.22, 'square', 0.16, -160); setTimeout(() => beep(200, 0.26, 'triangle', 0.13, -90), 90); },
   crash: () => { beep(140, 0.4, 'sawtooth', 0.22, -90); beep(90, 0.55, 'square', 0.18, -50); },
 };

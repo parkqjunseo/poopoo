@@ -354,6 +354,8 @@ function drawPlayer() {
 
   if (state.dead) ctx.rotate(Math.min(1.5, state.deadT * 4));
   if (slide) ctx.scale(1.18, 0.52); // duck: squashed toilet
+  // 부활 직후 무적: 깜빡임
+  if (state.invuln > 0) ctx.globalAlpha = Math.floor(state.t * 14) % 2 ? 0.28 : 0.92;
   drawToiletBack(u, run, state.jumping && !slide, state.dead);
   ctx.restore();
 }
@@ -646,6 +648,10 @@ function render() {
   drawChasers();
   ctx.restore();
   drawVignette();
+  if (state.hurtT > 0 && !state.dead) { // 목숨 하나 잃은 순간 붉은 플래시
+    ctx.fillStyle = `rgba(215,45,40,${Math.min(0.34, state.hurtT * 0.55)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
   if (state.dead) {
     ctx.fillStyle = `rgba(120,80,25,${Math.min(0.32, state.deadT)})`;
     ctx.fillRect(0, 0, W, H);

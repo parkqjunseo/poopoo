@@ -8,17 +8,22 @@
 // ---------- 월드 상수 ----------
 const LANE_X = [-1, 0, 1];     // lane world offsets
 const PLAYER_Z = 2.2;          // player depth — pushed toward screen center
+const MAX_LIVES = 3;           // 시작 목숨
+const INVULN_TIME = 2.0;       // 부활 후 무적 시간(초)
 
 // ---------- 게임 상태 (단일 소유: engine) ----------
 const state = {
   mode: 'menu',                // 'menu' | 'intro' | 'play'
   running: false, dead: false, introT: 0,
   dist: 0, coins: 0, speed: 16, t: 0,
+  lives: MAX_LIVES,            // 남은 목숨
+  invuln: 0,                   // 부활 직후 무적 타이머
+  hurtT: 0,                    // 피격 연출 타이머
   lane: 1, laneX: 0,           // current smooth x (in lane units)
   y: 0, vy: 0, jumping: false, jumps: 0,
   sliding: 0,                  // slide timer
   shake: 0, deadT: 0,
-  best: +(localStorage.getItem('tr_best') || 0),
+  best: +(localStorage.getItem('poopoo_best_score') || 0),
 };
 let obstacles = [];  // {z, lane, type}  type: 'log'|'bar'|'wall'
 let coinsArr = [];   // {z, lane, y}
@@ -34,6 +39,7 @@ function reset() {
   state.lane = 1; state.laneX = 0; state.y = 0; state.vy = 0;
   state.jumping = false; state.jumps = 0; state.sliding = 0; state.dead = false;
   state.shake = 0; state.deadT = 0;
+  state.lives = MAX_LIVES; state.invuln = 0; state.hurtT = 0;
   obstacles = []; coinsArr = []; decos = []; throwsArr = [];
   nextSpawnZ = 30; nextDecoZ = 2; nextThrowT = 3;
   for (let z = 2; z < DRAW_FAR; z += 2.2) spawnDeco(z);
@@ -163,6 +169,9 @@ function update(dt) {
     if (state.y <= 0) { state.y = 0; state.jumping = false; state.jumps = 0; state.vy = 0; }
   }
   if (state.sliding > 0) state.sliding -= dt;
+  if (state.invuln > 0) state.invuln -= dt;
+  if (state.hurtT > 0) state.hurtT -= dt;
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 3);
 
   // advance world
   for (const o of obstacles) o.z -= dz;
@@ -179,15 +188,18 @@ function update(dt) {
   }
   while (nextDecoZ < DRAW_FAR) { spawnDeco(DRAW_FAR); nextDecoZ += 2.2; }
 
-  // collisions (player at z≈PLAYER_Z)
-  for (const o of obstacles) {
-    if (o.z > PLAYER_Z - 0.8 && o.z < PLAYER_Z + 0.7 && Math.abs(LANE_X[o.lane] - state.laneX) < 0.55) {
-      let hit = false;
-      if (o.type === 'log') hit = state.y < 0.3;
-      else if (o.type === 'bar') hit = state.sliding <= 0 && state.y < 0.75;
-      else hit = state.y < 1.0;
-      if (hit) { die(); return; }
+  // collisions (player at z≈PLAYER_Z) — 무적 중에는 통과
+  if (state.invuln <= 0) {
+    for (const o of obstacles) {
+      if (o.z > PLAYER_Z - 0.8 && o.z < PLAYER_Z + 0.7 && Math.abs(LANE_X[o.lane] - state.laneX) < 0.55) {
+        let hit = false;
+        if (o.type === 'log') hit = state.y < 0.3;
+        else if (o.type === 'bar') hit = state.sliding <= 0 && state.y < 0.75;
+        else hit = state.y < 1.0;
+        if (hit) { hitPlayer(); break; } // respawn()이 배열을 갈아끼우므로 즉시 중단
+      }
     }
+    if (state.dead) return;
   }
   for (const c of coinsArr) {
     if (!c.got && c.z > PLAYER_Z - 1.0 && c.z < PLAYER_Z + 1.0 &&
@@ -203,23 +215,50 @@ function update(dt) {
     throwsArr.push({ z: -0.9, lane: state.lane, age: 0, y: 0 });
     sfx.throw();
   }
+  let tpHit = false;
   for (const th of throwsArr) {
     th.age += dt;
     th.z += 3.5 * dt; // 플레이어 기준 상대 속도로 전진
     th.y = Math.abs(Math.sin(th.age * 9)) * Math.max(0, 0.45 - th.age * 0.22); // 통통 튀며 굴러옴
-    if (th.z > PLAYER_Z - 0.5 && th.z < PLAYER_Z + 0.5 &&
+    if (!tpHit && state.invuln <= 0 &&
+        th.z > PLAYER_Z - 0.5 && th.z < PLAYER_Z + 0.5 &&
         Math.abs(LANE_X[th.lane] - state.laneX) < 0.5 && state.y < 0.3) {
-      die(); return;
+      tpHit = true;
     }
   }
   throwsArr = throwsArr.filter(th => th.z < 14);
+  if (tpHit) { hitPlayer(); if (state.dead) return; }
 
   updateHUD(state.dist, state.coins);
 }
 
-function die() {
-  state.dead = true; state.shake = 1; sfx.crash();
-  if (navigator.vibrate) navigator.vibrate(150);
+// ---------- 피격 / 부활 / 사망 ----------
+function hitPlayer() {
+  if (state.dead || state.invuln > 0) return;
+  state.lives--;
+  state.shake = 1;
+  if (navigator.vibrate) navigator.vibrate(state.lives > 0 ? 90 : 150);
+  if (state.lives > 0) {
+    state.hurtT = 0.6;
+    state.invuln = INVULN_TIME;
+    sfx.hurt();
+    respawn();
+  } else {
+    sfx.crash();
+    state.dead = true; // deadT가 쌓이면 gameOver() 호출
+  }
+  updateLives(state.lives);
+}
+
+// 목숨이 남았을 때: 가운데 차선(시작 위치)에서 다시 달린다
+function respawn() {
+  state.lane = 1;
+  state.y = 0; state.vy = 0;
+  state.jumping = false; state.jumps = 0; state.sliding = 0;
+  // 부활 직후 즉사하지 않도록 앞쪽 위험물 정리
+  obstacles = obstacles.filter(o => o.z > PLAYER_Z + 7);
+  throwsArr = [];
+  nextThrowT = state.t + 3;
 }
 
 // ---------- 게임 루프 ----------
