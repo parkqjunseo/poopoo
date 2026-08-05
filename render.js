@@ -544,12 +544,37 @@ function drawThrownRoll(th) {
   ctx.strokeStyle = 'rgba(180,195,205,.8)'; ctx.lineWidth = s * 0.08;
   ctx.beginPath(); ctx.moveTo(s * 0.4, 0); ctx.lineTo(s * 0.85, 0); ctx.stroke();
   ctx.restore();
-  // warning "!" while it's still behind the player
-  if (th.z < PLAYER_Z - 0.6) {
-    ctx.fillStyle = '#ff5d5d';
-    ctx.font = `900 ${s * 1.1}px 'Segoe UI', sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText('!', p.x, p.y - s * 1.2);
+  // 경고는 바닥의 빨간 레인 박스(drawLaneWarning)가 대신한다
+}
+
+// 휴지가 날아올 레인을 바닥 전체에 반투명 빨간 박스로 미리 알려준다.
+// 바닥 표시라 캐릭터·장애물보다 먼저(아래에) 그린다.
+function drawLaneWarning(lane, alpha) {
+  const lx = LANE_X[lane], zN = 0.05, zF = 18, halfW = 0.5;
+  const nl = screenPos(lx - halfW, zN), nr = screenPos(lx + halfW, zN);
+  const fl = screenPos(lx - halfW, zF), fr = screenPos(lx + halfW, zF);
+  // 멀수록 옅어져 원근감이 살아난다
+  const g = ctx.createLinearGradient(0, fl.y, 0, nl.y);
+  g.addColorStop(0, 'rgba(255,60,45,0)');
+  g.addColorStop(0.45, `rgba(255,60,45,${0.28 * alpha})`);
+  g.addColorStop(1, `rgba(235,35,30,${0.58 * alpha})`);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(fl.x, fl.y); ctx.lineTo(fr.x, fr.y);
+  ctx.lineTo(nr.x, nr.y); ctx.lineTo(nl.x, nl.y);
+  ctx.closePath(); ctx.fill();
+  // 양옆 테두리
+  ctx.strokeStyle = `rgba(255,110,95,${0.8 * alpha})`;
+  ctx.lineWidth = Math.max(2, Math.min(W, H) * 0.006);
+  ctx.beginPath(); ctx.moveTo(fl.x, fl.y); ctx.lineTo(nl.x, nl.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(fr.x, fr.y); ctx.lineTo(nr.x, nr.y); ctx.stroke();
+}
+
+// 경고 중이거나 아직 플레이어를 지나지 않은 휴지들의 레인을 표시
+function drawThrowWarnings() {
+  const pulse = 0.62 + 0.38 * Math.sin(state.t * 11);
+  for (const th of throwsArr) {
+    if (th.warn > 0 || th.z < PLAYER_Z + 0.4) drawLaneWarning(th.lane, pulse);
   }
 }
 
@@ -636,12 +661,13 @@ function render() {
   }
   drawSky();
   drawGround();
+  drawThrowWarnings();   // 바닥 경고 표시 — 장애물·캐릭터보다 아래
   // far → near (player sorted in so near obstacles pass in front of him)
   const drawables = [
     ...decos.map(d => ({ z: d.z, fn: () => drawDeco(d) })),
     ...obstacles.map(o => ({ z: o.z, fn: () => drawObstacle(o) })),
     ...coinsArr.filter(c => !c.got).map(c => ({ z: c.z, fn: () => drawCoin(c) })),
-    ...throwsArr.map(th => ({ z: th.z, fn: () => drawThrownRoll(th) })),
+    ...throwsArr.filter(th => th.warn <= 0).map(th => ({ z: th.z, fn: () => drawThrownRoll(th) })),
     { z: PLAYER_Z, fn: drawPlayer },
   ].sort((a, b) => b.z - a.z);
   for (const d of drawables) d.fn();

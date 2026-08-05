@@ -11,6 +11,23 @@ const PLAYER_Z = 2.2;          // player depth — pushed toward screen center
 const MAX_LIVES = 3;           // 시작 목숨
 const INVULN_TIME = 2.0;       // 부활 후 무적 시간(초)
 
+// ---------- 점프 밸런스 ----------
+// 도달 높이 = 1.2 * v² / GRAVITY  (아래 update()의 적분식에서 유도)
+//   1단(2.1) → 0.67 : 벤치(0.30)는 넘고 화분(0.73)은 못 넘음
+//   2단      → 누른 시점과 상관없이 항상 JUMP2_PEAK 까지. 화분은 넘되 현수막 천보다는 낮게
+//              (속도를 고정하면 언제 눌렀냐에 따라 정점이 0.5~1.4로 널뛰어 기준을 잡을 수 없다)
+// 판정 구간(z 폭 1.5)을 지나는 동안 높이가 오르내리므로, 기준선은 그 구간의 최저점보다
+// 넉넉히 아래에 둬야 "정점은 넘었는데 끝자락에서 걸리는" 일이 없다.
+const GRAVITY    = 8.5;
+const JUMP_V1    = 1.75;       // 1단 점프 → 정점 0.43
+const JUMP2_PEAK = 0.9;        // 2단 점프 도달 높이(고정). 현수막 천 윗단(y≈1.03)보다 낮게
+const H_BENCH    = 0.25;       // 나무의자 — 1단 점프로 통과
+const H_PLANT    = 0.55;       // 화분 — 1단으로는 못 넘고 2단이라야 통과
+
+// ---------- 휴지 투척 밸런스 ----------
+const THROW_WARN  = 0.9;       // 빨간 경고 박스가 먼저 떠 있는 시간(초)
+const THROW_SPEED = 3.0;       // 날아오는 속도 — 총 예고 시간 약 1.9초
+
 // ---------- 게임 상태 (단일 소유: engine) ----------
 const state = {
   mode: 'menu',                // 'menu' | 'intro' | 'play'
@@ -91,9 +108,11 @@ function moveLane(d) {
 function doJump() {
   if (!state.running || state.dead) return;
   if (!state.jumping) {
-    state.jumping = true; state.jumps = 1; state.vy = 1.55; state.sliding = 0; sfx.jump();
+    state.jumping = true; state.jumps = 1; state.vy = JUMP_V1; state.sliding = 0; sfx.jump();
   } else if (state.jumps === 1) { // double jump!
-    state.jumps = 2; state.vy = 1.45; sfx.jump2();
+    // 현재 높이에서 JUMP2_PEAK 까지 딱 닿을 만큼의 속도를 준다 → 정점이 항상 일정
+    const need = Math.max(0, JUMP2_PEAK - state.y);
+    state.jumps = 2; state.vy = Math.sqrt(need * GRAVITY / 1.2); sfx.jump2();
   }
 }
 function doSlide() {
@@ -170,7 +189,7 @@ function update(dt) {
   // jump physics
   if (state.jumping) {
     state.y += state.vy * dt * 2.4;
-    state.vy -= dt * 7.2;
+    state.vy -= dt * GRAVITY;
     if (state.y <= 0) {           // 착지
       state.y = 0; state.jumping = false; state.jumps = 0; state.vy = 0;
       sfx.land();
@@ -210,9 +229,9 @@ function update(dt) {
     for (const o of obstacles) {
       if (o.z > PLAYER_Z - 0.8 && o.z < PLAYER_Z + 0.7 && Math.abs(LANE_X[o.lane] - state.laneX) < 0.55) {
         let hit = false;
-        if (o.type === 'log') hit = state.y < 0.3;
-        else if (o.type === 'bar') hit = state.sliding <= 0 && state.y < 0.75;
-        else hit = state.y < 1.0;
+        if (o.type === 'log') hit = state.y < H_BENCH;          // 나무의자 — 1단 점프
+        else if (o.type === 'bar') hit = state.sliding <= 0;    // 현수막 — 오직 슬라이딩
+        else hit = state.y < H_PLANT;                           // 화분 — 2단 점프
         if (hit) { hitPlayer(); break; } // respawn()이 배열을 갈아끼우므로 즉시 중단
       }
     }
@@ -226,16 +245,19 @@ function update(dt) {
     }
   }
 
-  // 추격자의 휴지 투척! 플레이어 차선을 노리고 뒤에서 굴러온다 (점프/차선 변경으로 회피)
+  // 추격자의 휴지 투척!
+  // 먼저 해당 레인에 빨간 경고 박스를 띄우고(THROW_WARN), 그 뒤에 실제로 날아온다.
+  // 경고 + 비행 시간을 합쳐 약 1.9초 — 그 사이에 레인을 옮기거나 점프해서 피하면 된다.
   if (state.t > nextThrowT) {
     nextThrowT = state.t + Math.max(2.2, 5.5 - state.t * 0.03) + Math.random() * 2;
-    throwsArr.push({ z: -0.9, lane: state.lane, age: 0, y: 0 });
+    throwsArr.push({ z: -0.9, lane: state.lane, age: 0, y: 0, warn: THROW_WARN });
     sfx.throw();
   }
   let tpHit = false;
   for (const th of throwsArr) {
+    if (th.warn > 0) { th.warn -= dt; continue; }   // 아직 경고 단계 — 날아오지 않음
     th.age += dt;
-    th.z += 3.5 * dt; // 플레이어 기준 상대 속도로 전진
+    th.z += THROW_SPEED * dt; // 플레이어 기준 상대 속도로 전진
     th.y = Math.abs(Math.sin(th.age * 9)) * Math.max(0, 0.45 - th.age * 0.22); // 통통 튀며 굴러옴
     if (!tpHit && state.invuln <= 0 &&
         th.z > PLAYER_Z - 0.5 && th.z < PLAYER_Z + 0.5 &&
