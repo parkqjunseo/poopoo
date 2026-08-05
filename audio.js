@@ -82,6 +82,53 @@ const bgm = {
   },
 };
 
+/* ============================================
+   파일 기반 효과음 — 좌우 이동
+   짧은 mp3를 미리 디코딩해 두고 레인을 바꿀 때마다 재생한다.
+   ============================================ */
+const LANE_SFX_SRC = 'sfx-lane.mp3';
+const LANE_SFX_VOL = 0.2;
+const LANE_SFX_FROM = 0;      // 클립에서 잘라 쓸 시작 위치(초)
+const LANE_SFX_LEN  = 0;      // 재생 길이(초), 0이면 클립 전체
+let laneBuf = null, laneLoading = false, lanePlaying = null;
+
+function loadLaneSfx() {
+  if (laneBuf || laneLoading) return;
+  laneLoading = true;
+  fetch(LANE_SFX_SRC)
+    .then(r => r.arrayBuffer())
+    .then(b => audio().decodeAudioData(b))
+    .then(buf => { laneBuf = buf; laneLoading = false; })
+    .catch(() => { laneLoading = false; });   // 실패하면 합성음으로 대체
+}
+
+function playLaneSfx() {
+  if (!laneBuf) { loadLaneSfx(); return false; }
+  try {
+    const ac = audio();
+    // 연속으로 레인을 바꿀 때 소리가 겹쳐 쌓이지 않도록 이전 것을 짧게 페이드하며 정리
+    if (lanePlaying) {
+      const { src, gain } = lanePlaying;
+      gain.gain.cancelScheduledValues(ac.currentTime);
+      gain.gain.setValueAtTime(gain.gain.value, ac.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.03);
+      src.stop(ac.currentTime + 0.04);
+      lanePlaying = null;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = laneBuf;
+    const gain = ac.createGain();
+    gain.gain.value = LANE_SFX_VOL;
+    src.connect(gain); gain.connect(master());
+    const len = LANE_SFX_LEN > 0 ? LANE_SFX_LEN : undefined;
+    if (len) src.start(0, LANE_SFX_FROM, len); else src.start(0, LANE_SFX_FROM);
+    const mine = { src, gain };
+    lanePlaying = mine;
+    src.onended = () => { if (lanePlaying === mine) lanePlaying = null; };
+    return true;
+  } catch (e) { return false; }
+}
+
 // env를 주면 부드럽게 부풀었다 사라지는 음 (화음·지속음)
 // 생략하면 튕기듯 감쇠하는 음 (타격음·짧은 신호음)
 function beep(freq, dur, type = 'square', vol = 0.12, slide = 0, env) {
@@ -218,7 +265,8 @@ const sfx = {
   },
   // 슬라이딩 — 후보 5종 중 SLIDE_PICK 으로 고름 (↓ slideVariants)
   slide: () => slideVariants[SLIDE_PICK](),
-  lane: () => beep(500, 0.06, 'triangle', 0.08),
+  // 좌우 이동 — mp3 클립. 아직 로딩 전이거나 실패하면 기존 합성음으로 대체
+  lane: () => { if (!playLaneSfx()) beep(500, 0.06, 'triangle', 0.08); },
   coin: () => { beep(1180, 0.09, 'square', 0.09); setTimeout(() => beep(1570, 0.12, 'square', 0.09), 60); },
   throw: () => beep(950, 0.28, 'sawtooth', 0.06, -600),
 
