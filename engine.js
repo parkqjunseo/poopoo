@@ -32,6 +32,7 @@ let throwsArr = [];  // 추격자가 던진 휴지 {z, lane, age, y}
 let nextSpawnZ = 30;
 let nextDecoZ = 2;
 let nextThrowT = 3;  // 다음 휴지 투척 시각 (state.t 기준)
+let lastStepIdx = 0; // 발소리를 다리 애니메이션에 맞추기 위한 걸음 번호
 
 // ---------- 리셋 / 스폰 ----------
 function reset() {
@@ -41,7 +42,7 @@ function reset() {
   state.shake = 0; state.deadT = 0;
   state.lives = MAX_LIVES; state.invuln = 0; state.hurtT = 0;
   obstacles = []; coinsArr = []; decos = []; throwsArr = [];
-  nextSpawnZ = 30; nextDecoZ = 2; nextThrowT = 3;
+  nextSpawnZ = 30; nextDecoZ = 2; nextThrowT = 3; lastStepIdx = 0;
   for (let z = 2; z < DRAW_FAR; z += 2.2) spawnDeco(z);
   nextDecoZ = DRAW_FAR;
 }
@@ -97,11 +98,15 @@ function doJump() {
 }
 function doSlide() {
   if (!state.running || state.dead) return;
+  // 키를 꾹 누르면 keydown 이 자동 반복되므로, 이미 미끄러지는 중이면 소리를 다시 내지 않는다
+  const already = state.sliding > 0;
   if (state.jumping) { state.vy = -2.6; } // fast-fall into slide
-  state.sliding = 0.62; sfx.slide();
+  state.sliding = 0.62;
+  if (!already) sfx.slide();
 }
 window.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  if (e.key === 'm' || e.key === 'M') { bgm.toggle(); return; }  // 배경음악 켜기/끄기
   if (state.mode === 'intro') { startPlay(); return; }
   if (!state.running && (e.key === ' ' || e.key === 'Enter')) { startBtn.click(); return; }
   if (e.key === 'ArrowLeft' || e.key === 'a') moveLane(-1);
@@ -151,7 +156,7 @@ function update(dt) {
   if (state.dead) {
     state.deadT += dt;
     state.shake = Math.max(0, state.shake - dt * 30);
-    if (state.deadT > 1.1) gameOver();
+    if (state.deadT > 1.6) gameOver(); // 게임오버 음악이 화음으로 넘어갈 때 UI 등장
     return;
   }
   state.speed = Math.min(46, 16 + state.t * 0.45);
@@ -166,9 +171,21 @@ function update(dt) {
   if (state.jumping) {
     state.y += state.vy * dt * 2.4;
     state.vy -= dt * 7.2;
-    if (state.y <= 0) { state.y = 0; state.jumping = false; state.jumps = 0; state.vy = 0; }
+    if (state.y <= 0) {           // 착지
+      state.y = 0; state.jumping = false; state.jumps = 0; state.vy = 0;
+      sfx.land();
+    }
   }
   if (state.sliding > 0) state.sliding -= dt;
+
+  // 발소리 — render의 다리 애니메이션(state.t * 13)과 같은 위상으로 한 걸음씩
+  const stepIdx = Math.floor(state.t * 13 / Math.PI);
+  if (state.jumping || state.sliding > 0) {
+    lastStepIdx = stepIdx;        // 공중/슬라이딩 중엔 발소리 없음
+  } else if (stepIdx !== lastStepIdx) {
+    lastStepIdx = stepIdx;
+    sfx.step();
+  }
   if (state.invuln > 0) state.invuln -= dt;
   if (state.hurtT > 0) state.hurtT -= dt;
   if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 3);
@@ -241,10 +258,16 @@ function hitPlayer() {
   if (state.lives > 0) {
     state.hurtT = 0.6;
     state.invuln = INVULN_TIME;
+    sfx.crack();                            // 다리에 쩍 하고 금이 간다
     sfx.hurt();
     respawn();
   } else {
-    sfx.crash();
+    // 게임오버 연출: 마지막 목숨이 닳는 소리 → 게임오버 음악
+    // 배경음악을 걷어내야 게임오버 음악이 묻히지 않는다
+    bgm.stop(450);
+    sfx.crack();
+    sfx.hurt();
+    setTimeout(() => sfx.gameOver(), 600);
     state.dead = true; // deadT가 쌓이면 gameOver() 호출
   }
   updateLives(state.lives);

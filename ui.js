@@ -62,6 +62,7 @@ updateLives(MAX_LIVES);
 
 startBtn.addEventListener('click', () => {
   audio();
+  bgm.start();      // 배경음악 시작 (클릭이라는 사용자 동작이 있어야 브라우저가 허용)
   reset();
   updateLives(state.lives);
   state.mode = 'intro';

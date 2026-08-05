@@ -1,6 +1,10 @@
 /* ============================================
    audio.js — 🔧 B담당 (엔진/시스템)
    WebAudio 효과음. 새 효과음은 sfx에 추가.
+
+   합성 재료 두 가지
+     beep()  : 오실레이터 — 음정이 있는 소리 (점프, 코인, 물 튀는 소리)
+     noise() : 필터드 화이트노이즈 — 음정이 없는 소리 (발소리, 마찰, 파열, 물)
    ============================================ */
 'use strict';
 
@@ -10,25 +14,326 @@ function audio() {
   if (AC.state === 'suspended') AC.resume();
   return AC;
 }
-function beep(freq, dur, type = 'square', vol = 0.12, slide = 0) {
+
+// 모든 소리가 거쳐가는 마스터 버스 — 동시에 여러 소리가 나도 찢어지지 않게 압축
+let MASTER = null;
+function master() {
+  const ac = audio();
+  if (!MASTER) {
+    MASTER = ac.createGain();
+    MASTER.gain.value = 0.9;
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -10;   // 와장창 뒤에 오는 소리까지 눌러버리지 않게 완만하게
+    comp.ratio.value = 4;
+    comp.release.value = 0.45;
+    MASTER.connect(comp);
+    comp.connect(ac.destination);
+  }
+  return MASTER;
+}
+
+/* ============================================
+   배경음악 — 달리는 동안 계속 흐르고, 게임오버 때 걷힌다
+   ============================================ */
+const BGM_SRC = 'bgm-level-one-sprint.mp3';
+const BGM_VOL = 0.32;          // 효과음을 덮지 않으면서 흥이 나는 정도
+let BGM = null, bgmFadeTimer = null;
+
+function bgmEl() {
+  if (!BGM) {
+    BGM = new Audio(BGM_SRC);
+    BGM.loop = true;             // 곡이 끝나면 처음부터 다시
+    BGM.volume = 0;
+    BGM.preload = 'auto';
+  }
+  return BGM;
+}
+
+// 뚝 끊기면 어색하므로 목표 음량까지 서서히 오르내린다
+function bgmFade(to, ms, done) {
+  const a = bgmEl();
+  clearInterval(bgmFadeTimer);
+  const from = a.volume, steps = Math.max(1, Math.round(ms / 40));
+  let i = 0;
+  bgmFadeTimer = setInterval(() => {
+    i++;
+    a.volume = Math.min(1, Math.max(0, from + (to - from) * (i / steps)));
+    if (i >= steps) { clearInterval(bgmFadeTimer); bgmFadeTimer = null; if (done) done(); }
+  }, 40);
+}
+
+const bgm = {
+  start: () => {
+    const a = bgmEl();
+    a.currentTime = 0;
+    const p = a.play();
+    if (p && p.catch) p.catch(() => {});   // 브라우저가 막아도 게임은 그대로 진행
+    bgmFade(BGM_VOL, 900);
+  },
+  stop: (ms = 500) => bgmFade(0, ms, () => bgmEl().pause()),
+  duck: (ms = 300) => bgmFade(BGM_VOL * 0.25, ms),   // 잠깐 낮춤
+  unduck: (ms = 400) => bgmFade(BGM_VOL, ms),
+  // 음소거 토글 — 켜면 true 반환
+  toggle: () => {
+    const a = bgmEl();
+    if (a.paused) { const p = a.play(); if (p && p.catch) p.catch(() => {}); bgmFade(BGM_VOL, 300); return true; }
+    bgmFade(0, 200, () => a.pause());
+    return false;
+  },
+};
+
+// env를 주면 부드럽게 부풀었다 사라지는 음 (화음·지속음)
+// 생략하면 튕기듯 감쇠하는 음 (타격음·짧은 신호음)
+function beep(freq, dur, type = 'square', vol = 0.12, slide = 0, env) {
   try {
     const ac = audio();
     const o = ac.createOscillator(), g = ac.createGain();
+    const t0 = ac.currentTime;
     o.type = type; o.frequency.value = freq;
-    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), ac.currentTime + dur);
-    g.gain.setValueAtTime(vol, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
-    o.connect(g); g.connect(ac.destination);
-    o.start(); o.stop(ac.currentTime + dur);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t0 + dur);
+    if (env) {
+      const a = env.attack || 0.01, h = env.hold || 0;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + a);
+      g.gain.setValueAtTime(vol, t0 + a + h);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    } else {
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    }
+    o.connect(g); g.connect(master());
+    o.start(); o.stop(t0 + dur);
   } catch (e) {}
 }
+
+// 오실레이터 하나로 여러 음을 이어서 연주한다.
+// 음이 바뀔 때 끊고 다시 치는 게 아니라 음정이 미끄러지듯 옮겨가서(레가토)
+// 멜로디가 뚝뚝 끊기지 않고 자연스럽게 이어진다.
+//   notes: [{ f: 주파수, t: 시작 시각(초) }, ...]
+function melody(notes, opts = {}) {
+  try {
+    const ac = audio();
+    const o = ac.createOscillator(), g = ac.createGain();
+    const t0 = ac.currentTime;
+    const vol = opts.vol != null ? opts.vol : 0.12;
+    const glide = opts.glide != null ? opts.glide : 0.05;   // 음 사이를 미끄러지는 시간
+    const last = notes[notes.length - 1];
+    const end = last.t + (opts.tail || 0.5);
+    o.type = opts.type || 'square';
+
+    // 음정 — 각 음을 유지하다 다음 음 직전에 부드럽게 미끄러진다
+    o.frequency.setValueAtTime(notes[0].f, t0);
+    for (let i = 1; i < notes.length; i++) {
+      const st = t0 + notes[i].t;
+      o.frequency.setValueAtTime(notes[i - 1].f, Math.max(t0, st - glide));
+      o.frequency.exponentialRampToValueAtTime(notes[i].f, st);
+    }
+
+    // 음량 — 음이 바뀔 때마다 살짝 눌렀다 펴서 또박또박 들리게 (완전 평평하면 사이렌처럼 들림)
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + (opts.attack || 0.04));
+    for (let i = 1; i < notes.length; i++) {
+      const st = t0 + notes[i].t;
+      g.gain.setValueAtTime(vol * 0.7, Math.max(t0 + 0.001, st - glide));
+      g.gain.linearRampToValueAtTime(vol, st + 0.035);
+    }
+    g.gain.setValueAtTime(vol, t0 + last.t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + end);
+
+    o.connect(g); g.connect(master());
+    o.start(); o.stop(t0 + end);
+  } catch (e) {}
+}
+
+// 화이트노이즈 버퍼는 한 번만 만들어 재사용
+let NOISE_BUF = null;
+function noiseBuffer() {
+  const ac = audio();
+  if (!NOISE_BUF) {
+    const len = ac.sampleRate * 2;
+    NOISE_BUF = ac.createBuffer(1, len, ac.sampleRate);
+    const d = NOISE_BUF.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return NOISE_BUF;
+}
+
+// f0 → f1 으로 필터가 훑고 지나가는 노이즈
+//   env를 주면 "붙었다 유지되다 사라지는" 소리 (물소리·군중처럼 길게 끄는 소리)
+//   env를 생략하면 즉시 감쇠하는 타격음 (발소리·파열음)
+function noise(dur, vol, type, f0, f1, q = 1, env) {
+  try {
+    const ac = audio();
+    const src = ac.createBufferSource();
+    src.buffer = noiseBuffer();
+    src.loop = true;
+    src.playbackRate.value = 0.8 + Math.random() * 0.4; // 같은 버퍼라도 매번 다르게
+    const flt = ac.createBiquadFilter();
+    flt.type = type;
+    const t0 = ac.currentTime;
+    flt.frequency.setValueAtTime(Math.max(40, f0), t0);
+    if (f1 && f1 !== f0) {
+      flt.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t0 + dur);
+    }
+    flt.Q.value = q;
+    const g = ac.createGain();
+    if (env) {
+      const a = env.attack || 0.01;
+      const h = env.hold || 0;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + a);
+      g.gain.setValueAtTime(vol, t0 + a + h);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    } else {
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    }
+    src.connect(flt); flt.connect(g); g.connect(master());
+    src.start(); src.stop(t0 + dur);
+  } catch (e) {}
+}
+
 const sfx = {
-  coin: () => { beep(1180, 0.09, 'square', 0.09); setTimeout(() => beep(1570, 0.12, 'square', 0.09), 60); },
-  jump: () => beep(300, 0.22, 'sine', 0.16, 320),
-  jump2: () => beep(430, 0.2, 'sine', 0.16, 380),
-  slide: () => beep(220, 0.18, 'sawtooth', 0.07, -80),
-  throw: () => beep(950, 0.28, 'sawtooth', 0.06, -600),
+  // ---------- 이동 모션 ----------
+  // 산책로를 딛는 발소리 (한 걸음마다, 매번 살짝 다르게)
+  step: () => {
+    noise(0.07, 0.075, 'lowpass', 800 + Math.random() * 400, 240, 1);
+    beep(92 + Math.random() * 26, 0.06, 'sine', 0.05, -32);
+  },
+  // 도약 — 바닥을 차고 붕 떠오름
+  jump: () => {
+    beep(280, 0.2, 'sine', 0.15, 340);
+    noise(0.13, 0.06, 'bandpass', 650, 2400, 0.8);
+  },
+  // 2단 점프 — 공중에서 한 번 더, 더 높고 반짝이게
+  jump2: () => {
+    beep(450, 0.18, 'sine', 0.13, 430);
+    beep(690, 0.14, 'triangle', 0.075, 520);
+    noise(0.12, 0.05, 'bandpass', 1300, 3400, 0.9);
+  },
+  // 착지 — 도자기가 바닥에 쿵
+  land: () => {
+    beep(125, 0.16, 'sine', 0.16, -65);
+    noise(0.13, 0.1, 'lowpass', 750, 170, 1);
+  },
+  // 슬라이딩 — 후보 5종 중 SLIDE_PICK 으로 고름 (↓ slideVariants)
+  slide: () => slideVariants[SLIDE_PICK](),
   lane: () => beep(500, 0.06, 'triangle', 0.08),
+  coin: () => { beep(1180, 0.09, 'square', 0.09); setTimeout(() => beep(1570, 0.12, 'square', 0.09), 60); },
+  throw: () => beep(950, 0.28, 'sawtooth', 0.06, -600),
+
+  // ---------- 피격 ----------
   hurt: () => { beep(320, 0.22, 'square', 0.16, -160); setTimeout(() => beep(200, 0.26, 'triangle', 0.13, -90), 90); },
+  // 목숨 감소 — 도자기에 쩍 하고 금이 간다
+  crack: () => {
+    noise(0.05, 0.13, 'highpass', 3200, 3200, 1);
+    beep(2400, 0.05, 'square', 0.09, -1400);
+    setTimeout(() => {
+      beep(1500, 0.07, 'square', 0.07, -900);
+      noise(0.09, 0.08, 'bandpass', 1900, 650, 2);
+    }, 55);
+  },
+
+  // ---------- 게임오버 ----------
+  // 와장창!!! — 변기 다리가 산산조각 (뒤에 올 소리를 덮지 않도록 짧고 굵게)
+  shatter: () => {
+    noise(0.22, 0.28, 'highpass', 2800, 900, 0.7); // 터지는 순간
+    beep(115, 0.42, 'sawtooth', 0.18, -58);        // 묵직한 충격
+    for (let i = 0; i < 8; i++) {                  // 파편이 사방으로 튄다
+      setTimeout(() => {
+        beep(2900 - i * 210 + Math.random() * 700, 0.06, 'square', 0.06, -1500);
+        noise(0.08, 0.055, 'bandpass', 2200 + Math.random() * 2000, 900, 3);
+      }, 35 + i * 45);
+    }
+    setTimeout(() => noise(0.35, 0.06, 'lowpass', 420, 130, 1), 230); // 잔해가 구름
+  },
+
+  // 게임오버 음악 — 하강하는 멜로디 + 낮은 단조 화음 (↓ gameOverMusic 에서 고름)
+  gameOver: () => gameOverMusic[GAMEOVER_PICK](),
   crash: () => { beep(140, 0.4, 'sawtooth', 0.22, -90); beep(90, 0.55, 'square', 0.18, -50); },
 };
+
+/* ============================================
+   슬라이딩 효과음 후보
+   sound-test.html 에서 들어보고 SLIDE_PICK 만 바꾸면 교체됩니다.
+   ============================================ */
+const slideVariants = {
+  // A. 스키드 — 공명이 확 내려꽂히는 "슈욱", 속도감이 가장 큼
+  skid: () => {
+    noise(0.5, 0.2, 'bandpass', 3000, 560, 9, { attack: 0.03, hold: 0.09 });
+    noise(0.45, 0.05, 'highpass', 1900, 900, 1, { attack: 0.04, hold: 0.08 });
+  },
+
+  // B. 사각사각 — 옷이 바닥에 쓸리는 마른 마찰음, 튀지 않고 자연스러움
+  scrape: () => {
+    noise(0.6, 0.15, 'bandpass', 1100, 700, 2.5, { attack: 0.08, hold: 0.24 });
+    noise(0.6, 0.07, 'lowpass', 1300, 480, 1, { attack: 0.09, hold: 0.22 });
+  },
+
+  // C. 휘익 — 공기를 가르며 지나가는 부드러운 바람 소리
+  whoosh: () => {
+    noise(0.65, 0.17, 'highpass', 600, 2600, 0.9, { attack: 0.15, hold: 0.1 });
+    noise(0.65, 0.09, 'bandpass', 1700, 750, 1.5, { attack: 0.17, hold: 0.08 });
+  },
+
+  // D. 뾰로롱 — 만화식 슬라이드 휘슬. 게임의 코믹한 톤과 가장 잘 맞음
+  whistle: () => {
+    beep(1100, 0.4, 'sine', 0.1, -820, { attack: 0.03, hold: 0.05 });
+    beep(2200, 0.4, 'sine', 0.028, -1650, { attack: 0.03, hold: 0.05 });
+    noise(0.36, 0.045, 'bandpass', 1500, 520, 3, { attack: 0.04, hold: 0.05 });
+  },
+
+  // E. 짧게 쓱— 툭 — 미끄러지다 바닥에 걸려 멈추는 느낌
+  brake: () => {
+    noise(0.32, 0.18, 'bandpass', 2200, 820, 6, { attack: 0.02, hold: 0.06 });
+    setTimeout(() => noise(0.16, 0.09, 'lowpass', 520, 200, 1), 290);
+  },
+};
+let SLIDE_PICK = 'whistle';   // ← 여기만 바꾸면 게임에 적용됨
+
+/* ============================================
+   게임오버 음악
+   sound-test.html 에서 들어보고 GAMEOVER_PICK 만 바꾸면 교체됩니다.
+   ============================================ */
+const gameOverMusic = {
+  // A. 레트로 아케이드 — 음이 미끄러지듯 내려오다 Dm 화음으로 잦아든다
+  retro: () => {
+    melody([                       // D5 → C#5 → B4 → A#4
+      { f: 587.33, t: 0    },
+      { f: 554.37, t: 0.19 },
+      { f: 493.88, t: 0.38 },
+      { f: 466.16, t: 0.57 },
+    ], { type: 'square', vol: 0.115, glide: 0.055, attack: 0.05, tail: 0.52 });
+    setTimeout(() => {             // 멜로디 꼬리와 겹치며 스르르 올라오는 Dm 화음
+      beep(293.66, 1.7, 'square',   0.09,  0, { attack: 0.09, hold: 0.55 }); // D4
+      beep(349.23, 1.7, 'square',   0.075, 0, { attack: 0.11, hold: 0.50 }); // F4
+      beep(440.00, 1.7, 'square',   0.06,  0, { attack: 0.13, hold: 0.45 }); // A4
+      beep(146.83, 1.9, 'triangle', 0.125, 0, { attack: 0.07, hold: 0.70 }); // D3
+      beep(73.42,  2.0, 'sine',     0.125, 0, { attack: 0.08, hold: 0.80 }); // D2
+    }, 830);
+  },
+
+  // B. 뿌우— 실패 트롬본 — 음과 음이 미끄러져 붙는 "왕 왕 왕 와아앙"
+  trombone: () => {
+    melody([                       // C4 → A#3 → G#3 → G3
+      { f: 261.63, t: 0    },
+      { f: 233.08, t: 0.34 },
+      { f: 207.65, t: 0.68 },
+      { f: 196.00, t: 1.02 },
+    ], { type: 'sawtooth', vol: 0.14, glide: 0.13, attack: 0.05, tail: 1.05 });
+    setTimeout(() => beep(92.50, 1.3, 'sine', 0.11, 0, { attack: 0.08, hold: 0.5 }), 1020);
+  },
+
+  // C. 무겁게 가라앉는 — 저음이 서서히 내려앉는 진지한 버전
+  somber: () => {
+    melody([                       // A3 → G3 → F3
+      { f: 220.00, t: 0    },
+      { f: 196.00, t: 0.55 },
+      { f: 174.61, t: 1.10 },
+    ], { type: 'triangle', vol: 0.12, glide: 0.35, attack: 0.12, tail: 1.2 });
+    beep(261.63, 2.4, 'triangle', 0.075, -87, { attack: 0.15, hold: 0.9 }); // C4 → F3
+    beep(87.31,  2.6, 'sine',     0.13,  -20, { attack: 0.1,  hold: 1.1 }); // F2 저음
+    setTimeout(() => beep(1174.7, 0.9, 'sine', 0.045, -580), 260);          // 아득한 잔향
+  },
+};
+let GAMEOVER_PICK = 'somber';   // ← 여기만 바꾸면 게임에 적용됨
