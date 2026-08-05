@@ -279,12 +279,10 @@ function hitPlayer() {
   if (state.lives > 0) {
     state.hurtT = 0.6;
     state.invuln = INVULN_TIME;
-    sfx.crack();                            // 다리에 쩍 하고 금이 간다
     sfx.hurt();
     respawn();
   } else {
     // 게임오버 연출: 마지막 목숨이 닳는 소리 → 게임오버 음악
-    sfx.crack();
     sfx.hurt();
     setTimeout(() => sfx.gameOver(), 600);
     state.dead = true; // deadT가 쌓이면 gameOver() 호출

@@ -41,10 +41,10 @@ function master() {
    파일이 없거나 디코딩에 실패하면 각 소리의 합성음으로 자동 대체된다.
    ============================================ */
 const CLIPS = {
-  lane:  { src: 'sfx-lane.mp3',  vol: 0.2, from: 0, len: 0 },
   jump:  { src: 'sfx-jump.mp3',  vol: 0.15, from: 0, len: 0 },   // 1단 점프
-  jump2: { src: 'sfx-jump2.mp3', vol: 0.2, from: 0, len: 0 },    // 2단 점프
-  slide: { src: 'sfx-slide.mp3', vol: 0.2, from: 0, len: 0 },
+  jump2: { src: 'sfx-jump2.mp3', vol: 0.2,  from: 0, len: 0 },   // 2단 점프
+  lane:  { src: 'sfx-lane.mp3',  vol: 0.05, from: 0, len: 0 },   // 좌우 이동
+  hurt:  { src: 'sfx-hurt.mp3',  vol: 0.35, from: 0, len: 0 },   // 목숨 감소 (그 외는 합성음)
 };
 
 function loadClips() {
@@ -220,7 +220,7 @@ const sfx = {
     beep(280, 0.2, 'sine', 0.15, 340);
     noise(0.13, 0.06, 'bandpass', 650, 2400, 0.8);
   },
-  // 2단 점프 — 1단과 다른 클립. 1단 소리가 아직 울리는 중이면 겹치지 않게 걷어낸다
+  // 2단 점프 — mp3 클립. 1단 소리가 아직 울리는 중이면 겹치지 않게 걷어낸다
   jump2: () => {
     stopClip('jump');
     if (playClip('jump2')) return;
@@ -233,15 +233,20 @@ const sfx = {
     beep(125, 0.16, 'sine', 0.16, -65);
     noise(0.13, 0.1, 'lowpass', 750, 170, 1);
   },
-  // 슬라이딩 — mp3 클립. 실패하면 합성음 후보(slideVariants)로 대체
-  slide: () => { if (!playClip('slide')) slideVariants[SLIDE_PICK](); },
+  // 슬라이딩 — 후보 5종 중 SLIDE_PICK 으로 고름 (↓ slideVariants)
+  slide: () => slideVariants[SLIDE_PICK](),
   // 좌우 이동 — mp3 클립. 실패하면 기존 합성음으로 대체
   lane: () => { if (!playClip('lane')) beep(500, 0.06, 'triangle', 0.08); },
   coin: () => { beep(1180, 0.09, 'square', 0.09); setTimeout(() => beep(1570, 0.12, 'square', 0.09), 60); },
   throw: () => beep(950, 0.28, 'sawtooth', 0.06, -600),
 
   // ---------- 피격 ----------
-  hurt: () => { beep(320, 0.22, 'square', 0.16, -160); setTimeout(() => beep(200, 0.26, 'triangle', 0.13, -90), 90); },
+  // 목숨 감소 — mp3 클립. 실패하면 기존 합성음으로 대체
+  hurt: () => {
+    if (playClip('hurt')) return;
+    beep(320, 0.22, 'square', 0.16, -160);
+    setTimeout(() => beep(200, 0.26, 'triangle', 0.13, -90), 90);
+  },
   // 목숨 감소 — 도자기에 쩍 하고 금이 간다
   crack: () => {
     noise(0.05, 0.13, 'highpass', 3200, 3200, 1);
