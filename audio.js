@@ -33,98 +33,65 @@ function master() {
 }
 
 /* ============================================
-   배경음악 — 달리는 동안 계속 흐르고, 게임오버 때 걷힌다
+   파일 기반 효과음
+   짧은 mp3 클립을 미리 디코딩해 두고 필요할 때 재생한다.
+     vol  : 음량
+     from : 클립에서 잘라 쓸 시작 위치(초)
+     len  : 재생 길이(초), 0이면 클립 전체
+   파일이 없거나 디코딩에 실패하면 각 소리의 합성음으로 자동 대체된다.
    ============================================ */
-const BGM_SRC = 'bgm-level-one-sprint.mp3';
-const BGM_VOL = 0.32;          // 효과음을 덮지 않으면서 흥이 나는 정도
-let BGM = null, bgmFadeTimer = null;
-
-function bgmEl() {
-  if (!BGM) {
-    BGM = new Audio(BGM_SRC);
-    BGM.loop = true;             // 곡이 끝나면 처음부터 다시
-    BGM.volume = 0;
-    BGM.preload = 'auto';
-  }
-  return BGM;
-}
-
-// 뚝 끊기면 어색하므로 목표 음량까지 서서히 오르내린다
-function bgmFade(to, ms, done) {
-  const a = bgmEl();
-  clearInterval(bgmFadeTimer);
-  const from = a.volume, steps = Math.max(1, Math.round(ms / 40));
-  let i = 0;
-  bgmFadeTimer = setInterval(() => {
-    i++;
-    a.volume = Math.min(1, Math.max(0, from + (to - from) * (i / steps)));
-    if (i >= steps) { clearInterval(bgmFadeTimer); bgmFadeTimer = null; if (done) done(); }
-  }, 40);
-}
-
-const bgm = {
-  start: () => {
-    const a = bgmEl();
-    a.currentTime = 0;
-    const p = a.play();
-    if (p && p.catch) p.catch(() => {});   // 브라우저가 막아도 게임은 그대로 진행
-    bgmFade(BGM_VOL, 900);
-  },
-  stop: (ms = 500) => bgmFade(0, ms, () => bgmEl().pause()),
-  duck: (ms = 300) => bgmFade(BGM_VOL * 0.25, ms),   // 잠깐 낮춤
-  unduck: (ms = 400) => bgmFade(BGM_VOL, ms),
-  // 음소거 토글 — 켜면 true 반환
-  toggle: () => {
-    const a = bgmEl();
-    if (a.paused) { const p = a.play(); if (p && p.catch) p.catch(() => {}); bgmFade(BGM_VOL, 300); return true; }
-    bgmFade(0, 200, () => a.pause());
-    return false;
-  },
+const CLIPS = {
+  lane:  { src: 'sfx-lane.mp3',  vol: 0.2, from: 0, len: 0 },
+  jump:  { src: 'sfx-jump.mp3',  vol: 0.15, from: 0, len: 0 },   // 1단 점프
+  jump2: { src: 'sfx-jump2.mp3', vol: 0.2, from: 0, len: 0 },    // 2단 점프
+  slide: { src: 'sfx-slide.mp3', vol: 0.2, from: 0, len: 0 },
 };
 
-/* ============================================
-   파일 기반 효과음 — 좌우 이동
-   짧은 mp3를 미리 디코딩해 두고 레인을 바꿀 때마다 재생한다.
-   ============================================ */
-const LANE_SFX_SRC = 'sfx-lane.mp3';
-const LANE_SFX_VOL = 0.2;
-const LANE_SFX_FROM = 0;      // 클립에서 잘라 쓸 시작 위치(초)
-const LANE_SFX_LEN  = 0;      // 재생 길이(초), 0이면 클립 전체
-let laneBuf = null, laneLoading = false, lanePlaying = null;
-
-function loadLaneSfx() {
-  if (laneBuf || laneLoading) return;
-  laneLoading = true;
-  fetch(LANE_SFX_SRC)
-    .then(r => r.arrayBuffer())
-    .then(b => audio().decodeAudioData(b))
-    .then(buf => { laneBuf = buf; laneLoading = false; })
-    .catch(() => { laneLoading = false; });   // 실패하면 합성음으로 대체
+function loadClips() {
+  for (const c of Object.values(CLIPS)) {
+    if (c.buf || c.loading) continue;
+    c.loading = true;
+    fetch(c.src)
+      .then(r => r.arrayBuffer())
+      .then(b => audio().decodeAudioData(b))
+      .then(buf => { c.buf = buf; c.loading = false; })
+      .catch(() => { c.loading = false; c.failed = true; });
+  }
 }
 
-function playLaneSfx() {
-  if (!laneBuf) { loadLaneSfx(); return false; }
+// 재생 중인 클립을 짧게 줄이며 멈춘다 (그냥 끊으면 '딱' 하는 잡음이 난다)
+function stopClip(name) {
+  const c = CLIPS[name];
+  if (!c || !c.playing) return;
   try {
     const ac = audio();
-    // 연속으로 레인을 바꿀 때 소리가 겹쳐 쌓이지 않도록 이전 것을 짧게 페이드하며 정리
-    if (lanePlaying) {
-      const { src, gain } = lanePlaying;
-      gain.gain.cancelScheduledValues(ac.currentTime);
-      gain.gain.setValueAtTime(gain.gain.value, ac.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.03);
-      src.stop(ac.currentTime + 0.04);
-      lanePlaying = null;
-    }
+    const { src, gain } = c.playing;
+    gain.gain.cancelScheduledValues(ac.currentTime);
+    gain.gain.setValueAtTime(gain.gain.value, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.03);
+    src.stop(ac.currentTime + 0.04);
+  } catch (e) {}
+  c.playing = null;
+}
+
+// rate: 재생 속도(=음정). 같은 소리를 살짝 다르게 쓰고 싶을 때 사용
+function playClip(name, rate = 1) {
+  const c = CLIPS[name];
+  if (!c) return false;
+  if (!c.buf) { if (!c.failed) loadClips(); return false; }
+  try {
+    const ac = audio();
+    stopClip(name);   // 연달아 재생될 때 소리가 겹쳐 쌓이지 않도록
     const src = ac.createBufferSource();
-    src.buffer = laneBuf;
+    src.buffer = c.buf;
+    src.playbackRate.value = rate;
     const gain = ac.createGain();
-    gain.gain.value = LANE_SFX_VOL;
+    gain.gain.value = c.vol;
     src.connect(gain); gain.connect(master());
-    const len = LANE_SFX_LEN > 0 ? LANE_SFX_LEN : undefined;
-    if (len) src.start(0, LANE_SFX_FROM, len); else src.start(0, LANE_SFX_FROM);
+    if (c.len > 0) src.start(0, c.from, c.len); else src.start(0, c.from);
     const mine = { src, gain };
-    lanePlaying = mine;
-    src.onended = () => { if (lanePlaying === mine) lanePlaying = null; };
+    c.playing = mine;
+    src.onended = () => { if (c.playing === mine) c.playing = null; };
     return true;
   } catch (e) { return false; }
 }
@@ -247,13 +214,16 @@ const sfx = {
     noise(0.07, 0.075, 'lowpass', 800 + Math.random() * 400, 240, 1);
     beep(92 + Math.random() * 26, 0.06, 'sine', 0.05, -32);
   },
-  // 도약 — 바닥을 차고 붕 떠오름
+  // 도약 — mp3 클립
   jump: () => {
+    if (playClip('jump')) return;
     beep(280, 0.2, 'sine', 0.15, 340);
     noise(0.13, 0.06, 'bandpass', 650, 2400, 0.8);
   },
-  // 2단 점프 — 공중에서 한 번 더, 더 높고 반짝이게
+  // 2단 점프 — 1단과 다른 클립. 1단 소리가 아직 울리는 중이면 겹치지 않게 걷어낸다
   jump2: () => {
+    stopClip('jump');
+    if (playClip('jump2')) return;
     beep(450, 0.18, 'sine', 0.13, 430);
     beep(690, 0.14, 'triangle', 0.075, 520);
     noise(0.12, 0.05, 'bandpass', 1300, 3400, 0.9);
@@ -263,10 +233,10 @@ const sfx = {
     beep(125, 0.16, 'sine', 0.16, -65);
     noise(0.13, 0.1, 'lowpass', 750, 170, 1);
   },
-  // 슬라이딩 — 후보 5종 중 SLIDE_PICK 으로 고름 (↓ slideVariants)
-  slide: () => slideVariants[SLIDE_PICK](),
-  // 좌우 이동 — mp3 클립. 아직 로딩 전이거나 실패하면 기존 합성음으로 대체
-  lane: () => { if (!playLaneSfx()) beep(500, 0.06, 'triangle', 0.08); },
+  // 슬라이딩 — mp3 클립. 실패하면 합성음 후보(slideVariants)로 대체
+  slide: () => { if (!playClip('slide')) slideVariants[SLIDE_PICK](); },
+  // 좌우 이동 — mp3 클립. 실패하면 기존 합성음으로 대체
+  lane: () => { if (!playClip('lane')) beep(500, 0.06, 'triangle', 0.08); },
   coin: () => { beep(1180, 0.09, 'square', 0.09); setTimeout(() => beep(1570, 0.12, 'square', 0.09), 60); },
   throw: () => beep(950, 0.28, 'sawtooth', 0.06, -600),
 
