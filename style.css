@@ -1,0 +1,230 @@
+/* ============================================================
+   POO POO RUN — style.css
+   시작화면(9:10 1384×1536) · HUD · 게임오버(신규 에셋) · 모달
+   ============================================================ */
+html,body{overflow:hidden;}
+/* ============================================
+   style.css — 🎨 A담당 (디자인/연출)
+   시작/게임오버 = 목업 이미지 + 오버레이(버튼·점수)
+   ⚠️ rename 금지: #scoreBox #coinBox #overlay #ovMsg #ovStats #ovBest #startBtn .hidden
+   ============================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden; background: #0c0a07; touch-action: none;
+  font-family: 'Noto Sans KR', 'Segoe UI', sans-serif;
+}
+#wrap { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+canvas { display: block; background: #000; max-width: 100%; max-height: 100%; }
+
+/* ---------- HUD ---------- */
+#hud {
+  position: absolute; top: 0; left: 0; right: 0; padding: 14px 20px; z-index: 3;
+  display: flex; justify-content: space-between; pointer-events: none;
+  font-family: 'Jua', sans-serif; color: #fff;
+  text-shadow: 0 2px 0 rgba(90,60,20,.6), 0 3px 6px rgba(0,0,0,.5);
+}
+#hud .box {
+  font-size: clamp(16px, 3.2vw, 26px);
+  background: rgba(255,255,255,.18); backdrop-filter: blur(2px);
+  padding: 5px 15px; border-radius: 999px; border: 2px solid rgba(255,255,255,.35);
+}
+
+/* ---------- 오버레이 ---------- */
+#overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: radial-gradient(ellipse at 50% 42%, rgba(8,12,22,.42), rgba(3,6,12,.62));
+}
+.sr-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+#ovStats { display: none !important; }
+
+/* 시작/게임오버 토글 */
+.go-only { display: none; }
+.gameover .start-only { display: none; }
+.gameover .go-only { display: flex; }
+
+/* ---------- 시작 화면 (9:10 · 1384×1536 레이어 조립) ---------- */
+.startBackdrop{
+  position:absolute; inset:0; z-index:0;
+  background-size:cover; background-position:center;
+  filter:blur(34px) brightness(.5) saturate(1.2);
+  transform:scale(1.15);
+}
+.startStage{
+  position:relative; z-index:1; line-height:0;
+  container-type:size;                         /* ← cqh/cqw 단위 활성화 (레이어 높이 고정용) */
+  aspect-ratio:1384 / 1536;
+  width:min(100vw, calc(100dvh * 1384 / 1536));
+  max-width:1384px; max-height:100dvh; height:auto;
+  overflow:hidden;
+  border-radius:clamp(10px,2.6vmin,26px);
+  box-shadow:0 18px 60px rgba(0,0,0,.55), 0 0 0 3px rgba(255,255,255,.12) inset;
+  background:#8fd4f2;
+}
+.startStage .bg{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; object-position:50% 0%; display:block;
+}
+.startStage .lyr{ position:absolute; transform:translate(-50%,-50%); pointer-events:none; will-change:transform; }
+.startStage .lyr img{ width:100%; display:block; filter:drop-shadow(0 6px 10px rgba(20,12,0,.22)); }
+
+/* ── 재배치: 위→아래 시선 흐름 (로고 → 변기 → PLAY → 서브버튼) ──
+   로고는 height(cqh) 기준으로 고정 → 화면 비율과 무관하게 상단 밴드에 갇혀
+   변기 영역을 절대 침범하지 않음 (겹침 원천 차단). */
+.startStage .logo    { left:50%; top:25cqh; width:auto; z-index:4; }
+.startStage .logo img{ width:auto; height:45cqh; max-width:88cqw; }
+
+/* 변기: 화면 중앙보다 약간 아래 (로고 하단 37cqh → 변기 상단 45cqh = 8cqh 여백) */
+.startStage .toilet  { left:50%; top:57cqh; width:auto; z-index:3; }
+.startStage .toilet img{ width:auto; height:20cqh; }
+
+/* 러너: 변기 좌우, 살짝 아래로 겹쳐 배치 */
+.startStage .runners { left:50%; top:61cqh; width:62%; z-index:1; }
+
+.startStage .foreground{
+  position:absolute; left:50%; bottom:0; width:100%; z-index:2;
+  transform:translateX(-50%); pointer-events:none;
+}
+.startStage .foreground img{ width:100%; display:block; filter:drop-shadow(0 -2px 10px rgba(20,12,0,.18)); }
+.startStage .imgbtn{
+  position:absolute; transform:translate(-50%,-50%);
+  background:none; border:0; padding:0; cursor:pointer; pointer-events:auto;
+  -webkit-tap-highlight-color:transparent; line-height:0; z-index:5;
+  transition:transform .08s ease, filter .08s ease; will-change:transform;
+}
+.startStage .imgbtn img{ width:100%; display:block; filter:drop-shadow(0 5px 8px rgba(20,12,0,.28)); }
+.startStage .imgbtn:hover{ filter:brightness(1.04); }
+.startStage .imgbtn:active{ transform:translate(-50%,-50%) scale(.94); filter:brightness(1.1); }
+
+/* PLAY: 변기 아래 중앙, 가장 큰 CTA */
+.startStage .play  { left:50%;   top:74cqh; width:46%; }
+/* 서브 버튼: PLAY 아래, 좌우 대칭 (크기 기존 유지) */
+.startStage .howto { left:33.5%; top:87cqh; width:33.5%; }
+.startStage .recs  { left:66.5%; top:87cqh; width:29.5%; }
+
+@keyframes ppBob   {0%,100%{transform:translate(-50%,-50%) translateY(0)} 50%{transform:translate(-50%,-50%) translateY(-3.2%)}}
+@keyframes ppFloat {0%,100%{transform:translate(-50%,-50%) translateY(0) rotate(-1deg)} 50%{transform:translate(-50%,-50%) translateY(-1.6%) rotate(1deg)}}
+@keyframes ppRun   {0%,100%{transform:translate(-50%,-50%) translateY(0)} 50%{transform:translate(-50%,-50%) translateY(-1.4%)}}
+@keyframes ppPlay  {0%,100%{transform:translate(-50%,-50%) scale(1)} 50%{transform:translate(-50%,-50%) scale(1.045)}}
+.startStage .logo   { animation:ppFloat 4.5s ease-in-out infinite; }
+.startStage .toilet { animation:ppBob 1.05s ease-in-out infinite; }
+.startStage .runners{ animation:ppRun .62s ease-in-out infinite; }
+.startStage .play   { animation:ppPlay 1.25s ease-in-out infinite; }
+.startStage .play:active{ animation:none; }
+@media (prefers-reduced-motion: reduce){
+  .startStage .logo,.startStage .toilet,.startStage .runners,.startStage .play{ animation:none!important; }
+}
+
+/* ================= 게임오버 화면 (시작화면과 동일 비율 · 1384/1536 카드) ================= */
+/* 시작 화면처럼: 전체 블러 배경(goBackdrop) + 가운데 카드(goScene, 1384/1536).
+   카드 안에 background1 을 깔고 textimage 패널 + 빈 슬롯에 숫자만 오버레이. */
+
+/* 전체 블러 배경 (게임 캔버스가 양옆으로 비치지 않게) */
+.goBackdrop{
+  position:absolute; inset:0; z-index:0;
+  background:url('background1.png') center/cover;
+  filter:blur(34px) brightness(.5) saturate(1.2);
+  transform:scale(1.15);
+}
+
+/* 카드 (시작화면 .startStage 와 동일한 크기 규칙) */
+.goScene{
+  position:relative; z-index:1; container-type:size;
+  aspect-ratio:1384 / 1536;
+  width:min(100vw, calc(100dvh * 1384 / 1536));
+  max-width:1384px; max-height:100dvh; height:auto;
+  overflow:hidden;
+  border-radius:clamp(10px,2.6vmin,26px);
+  box-shadow:0 18px 60px rgba(0,0,0,.55), 0 0 0 3px rgba(255,255,255,.12) inset;
+  background:#8fd4f2;
+
+  /* 🔧 튜닝 포인트 */
+  --panel-h: 110cqh;    /* textimage 패널 높이 */
+  --panel-top: 2cqh; /* 패널 상단 위치 */
+  --retry-w: 30cqw;    /* 재시작 버튼 너비 */
+  --retry-top: 81cqh;  /* 재시작 버튼 세로 위치 */
+}
+
+/* 1) 카드 배경 (background1) */
+.goBg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 55%;z-index:0;}
+.goScrim{position:absolute;inset:0;z-index:1;
+  background:radial-gradient(ellipse at 50% 40%,rgba(0,0,0,.04),rgba(0,0,0,.30));}
+
+/* 2) 패널 (textimage.png) — container 로 만들어 폰트를 패널 기준으로 고정 */
+.goPanel{
+  position:absolute; left:50%; top:var(--panel-top); transform:translateX(-50%);
+  z-index:2; height:var(--panel-h); aspect-ratio:2048/3072;
+  container-type:size;
+  animation:goPop .42s cubic-bezier(.2,1.25,.4,1) both;
+}
+.goPanelArt{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+  filter:drop-shadow(0 1.5cqh 2.2cqh rgba(0,0,0,.30));}
+.goSub{display:none;}   /* 문구가 아트에 내장 → 숨김 */
+
+/* 3) 슬롯 오버레이 (위치·폰트 모두 패널 기준) */
+.slot{position:absolute; z-index:3;
+  display:flex; align-items:center; justify-content:center;
+  transform:translate(-50%,-50%); white-space:nowrap; line-height:1;
+  font-family:'Titan One','Jua',sans-serif; font-weight:400;}
+
+/* 최종 점수 (큰 박스) */
+.slotScore{left:50%; top:55%; width:50%; font-size:14cqw; color:#e0632a;
+  text-shadow:0 .3cqh 0 #fff,  0 1.7cqh 1.1cqh rgba(150,70,10,.28);}
+
+/* 하단 3칸 (달린 거리 / 휴지 / 최고) */
+.slotStat{top:71.5%; width:10%; font-size:3.6cqw; color:#6a4a1a;
+  text-shadow:0 1px 0 rgba(255,255,255,.7);}
+.slotDist{left:29.5%;}
+.slotCoin{left:49.7%;}
+.slotBest{left:70%;}
+
+/* 4) 재시작 버튼 */
+.goRetry{position:absolute; left:50%; top:var(--retry-top); transform:translateX(-50%);
+  z-index:4; background:none; border:0; padding:0; cursor:pointer; width:var(--retry-w);
+  -webkit-tap-highlight-color:transparent; transition:transform .08s;
+  animation:goPop .42s cubic-bezier(.2,1.25,.4,1) .1s both;}
+.goRetry img{width:100%; display:block; filter:drop-shadow(0 1.2cqh 1.4cqh rgba(30,90,0,.4));}
+.goRetry:active{transform:translateX(-50%) scale(.94);}
+
+@keyframes goPop{0%{opacity:0;transform:translateX(-50%) scale(.85)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
+@media(prefers-reduced-motion:reduce){.goPanel,.goRetry{animation:none;}}
+
+/* ================= 모달 (조작법 / 기록) ================= */
+.pill {
+  pointer-events: auto; cursor: pointer; border: none; color: #fff;
+  font-family: 'Jua', sans-serif; letter-spacing: .5px; border-radius: 999px;
+  padding: 13px 30px; font-size: clamp(16px, 3.4vw, 22px);
+  text-shadow: 0 2px 0 rgba(0,0,0,.22); transition: transform .07s, box-shadow .07s;
+}
+.pill:active { transform: translateY(4px); }
+.pill-wide { width: 100%; }
+.pill-yellow { background: linear-gradient(#ffd35a, #f4b02a); box-shadow: 0 7px 0 #d5891c, 0 10px 16px rgba(0,0,0,.3); }
+.pill-yellow:active { box-shadow: 0 3px 0 #d5891c, 0 5px 10px rgba(0,0,0,.3); }
+.pill-green { background: linear-gradient(#93da55, #5fb62f); box-shadow: 0 6px 0 #3f8b20, 0 9px 14px rgba(0,0,0,.28); }
+.pill-green:active { box-shadow: 0 2px 0 #3f8b20, 0 5px 10px rgba(0,0,0,.28); }
+
+.modal {
+  position: absolute; inset: 0; z-index: 6; display: none;
+  align-items: center; justify-content: center; padding: 24px;
+  background: rgba(6,10,4,.62); backdrop-filter: blur(3px);
+}
+.modal.open { display: flex; }
+.modalCard {
+  width: min(90vw, 400px); padding: 26px 22px;
+  background: linear-gradient(#fff9ec, #ffeec9);
+  border: 5px solid #e7ad55; border-radius: 28px;
+  box-shadow: inset 0 0 0 4px #fff4d8, 0 16px 34px rgba(0,0,0,.4);
+  display: flex; flex-direction: column; gap: 14px; align-items: stretch; text-align: center;
+}
+.modalTitle { font-family: 'Jua', sans-serif; color: #b96f22; font-size: clamp(24px, 6vw, 34px); letter-spacing: 1px; }
+.keys { display: flex; flex-direction: column; gap: 9px; }
+.key {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 11px 16px; border-radius: 13px; background: #fcecc0; border: 2px solid #ecc984;
+  font-family: 'Jua', sans-serif; color: #7a4f1c; font-size: clamp(12px, 2.6vw, 15px);
+}
+.key span { color: #b08a4a; }
+.recBody { font-family: 'Jua', sans-serif; color: #7a4f1c; font-size: clamp(15px, 3.4vw, 20px); line-height: 1.6; padding: 12px 0; }
+.recBody b { color: #b96f22; font-size: 1.3em; }
+
+.hidden { display: none !important; }
