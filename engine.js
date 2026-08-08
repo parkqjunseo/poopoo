@@ -64,10 +64,66 @@ function reset() {
   nextDecoZ = DRAW_FAR;
 }
 
-function spawnDeco(z) {
-  for (const side of [-1, 1]) {
-    if (Math.random() < 0.75) {
-      decos.push({ z, side, kind: Math.random() < 0.22 ? 'lamp' : (Math.random() < 0.5 ? 'tree' : 'bush') });
+/* [데코 이식] 산개 배치 + PNG 스프라이트 (장식 전용, 게임플레이 무관) */
+function spawnDeco(zBase) {
+  // 자연스러운 공원 산개 배치 — 대칭/일렬 대신 랜덤 위치·크기·깊이 (충돌/플레이 영역과 무관, 장식만)
+  const R = Math.random;
+  const rnd = (a, b) => a + R() * (b - a);
+  const chance = (p) => R() < p;
+  const pick = (a) => a[(R() * a.length) | 0];
+  const zJ = () => Math.max(0.3, zBase - R() * 2.2);
+  const side = () => (R() < 0.5 ? -1 : 1);
+  const FLW = ['flower1', 'flower2', 'flower3', 'flower4', 'flower5'];
+  const GRS = ['grass1', 'grass2', 'grass3'];
+
+  // 나무: 좌우 독립, 큰/작은 혼합, 간격·거리 랜덤 (일부는 화면 밖으로 잘림)
+  for (const sgn of [-1, 1]) {
+    if (chance(0.6)) {
+      const big = chance(0.45);
+      decos.push({
+        z: zJ(), kind: 'img', img: 'treeRound',
+        x: sgn * rnd(1.9, big ? 3.0 : 4.4),
+        hf: big ? rnd(0.6, 0.78) : rnd(0.32, 0.46),
+        flip: R() < 0.5
+      });
+    }
+  }
+  // 가로등: 나무보다 드물게, 위치 랜덤
+  for (const sgn of [-1, 1]) {
+    if (chance(0.3)) {
+      decos.push({
+        z: zJ(), kind: 'img', img: chance(0.5) ? 'lampDouble' : 'lampSingle',
+        x: sgn * rnd(1.62, 2.45), hf: rnd(0.5, 0.6), flip: R() < 0.5
+      });
+    }
+  }
+  // 벤치: 가끔, 크게 + 근처 새/꽃
+  if (chance(0.3)) {
+    const s = side();
+    decos.push({ z: zJ(), kind: 'img', img: s < 0 ? 'bench2' : 'bench1', x: s * rnd(1.95, 2.9), hf: rnd(0.22, 0.28) });
+    if (chance(0.5)) decos.push({ z: zJ(), kind: 'img', img: pick(['pigeon1', 'pigeon3']), x: s * rnd(1.8, 2.7), hf: rnd(0.13, 0.17), flip: R() < 0.5 });
+    if (chance(0.6)) decos.push({ z: zJ(), kind: 'img', img: pick(FLW), x: s * rnd(1.7, 3.0), hf: rnd(0.14, 0.2) });
+  }
+  // 쓰레기통: 드물게
+  if (chance(0.12)) { const s = side(); decos.push({ z: zJ(), kind: 'img', img: 'trash', x: s * rnd(1.65, 2.4), hf: rnd(0.17, 0.22) }); }
+
+  // 비둘기: 지면(자주·크게) + 하늘(가끔·크게)
+  if (chance(0.4)) { const s = side(); decos.push({ z: zJ(), kind: 'img', img: pick(['pigeon1', 'pigeon3']), x: s * rnd(1.7, 3.6), hf: rnd(0.13, 0.17), flip: R() < 0.5 }); }
+  if (chance(0.16)) { const s = side(); decos.push({ z: zJ(), kind: 'img', img: 'pigeon2', x: s * rnd(1.3, 3.2), hf: rnd(0.11, 0.15), flip: R() < 0.5, flyY: rnd(0.7, 1.15) }); }
+
+  // 꽃·풀·덤불: 빈 잔디 채우기 (좌우 각 1~2개, 크게, 종류 섞기, 살짝 회전)
+  for (const sgn of [-1, 1]) {
+    const n = 1 + ((R() * 2) | 0);
+    for (let i = 0; i < n; i++) {
+      const flower = R() < 0.5;
+      decos.push({
+        z: zJ(), kind: 'img',
+        img: flower ? pick(FLW) : pick(GRS),
+        x: sgn * rnd(1.62, 4.5),
+        hf: flower ? rnd(0.13, 0.2) : rnd(0.1, 0.17),
+        flip: R() < 0.5,
+        rot: (R() - 0.5) * 0.14
+      });
     }
   }
 }
