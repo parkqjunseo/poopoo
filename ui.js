@@ -62,7 +62,8 @@ updateLives(MAX_LIVES);
 
 startBtn.addEventListener('click', () => {
   audio();
-  loadClips();      // 효과음 mp3 클립들 미리 디코딩
+  loadClips();      // 효과음 클립들 미리 디코딩
+  bgm.start();      // 배경음악 (클릭이라는 사용자 동작이 있어야 브라우저가 허용)
   reset();
   updateLives(state.lives);
   state.mode = 'intro';

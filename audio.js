@@ -33,18 +33,119 @@ function master() {
 }
 
 /* ============================================
+   배경음악 — 페이드 인으로 시작, 게임오버 때 페이드 아웃.
+   무한 반복은 곡을 그냥 이어붙이면 이음매에서 뚝 끊기므로,
+   한 회차의 끝과 다음 회차의 앞을 서로 겹쳐(크로스페이드) 넘어가게 한다.
+   ============================================ */
+const BGM_SRC   = 'bgm-quick-silver-jump.mp3';
+const BGM_VOL   = 0.3;    // 효과음에 묻히지 않을 정도
+const BGM_FADE  = 1.4;    // 시작·종료 페이드(초)
+const BGM_XFADE = 2.0;    // 반복 이음매에서 겹치는 길이(초)
+
+let bgmBuf = null, bgmGainNode = null, bgmSources = [];
+let bgmTimer = null, bgmNextAt = 0, bgmLoading = false, bgmWanted = false;
+
+function bgmGain() {
+  const ac = audio();
+  if (!bgmGainNode) {
+    bgmGainNode = ac.createGain();
+    bgmGainNode.gain.value = 0;
+    bgmGainNode.connect(master());
+  }
+  return bgmGainNode;
+}
+
+function loadBgm() {
+  if (bgmBuf || bgmLoading) return;
+  bgmLoading = true;
+  fetch(BGM_SRC)
+    .then(r => r.arrayBuffer())
+    .then(b => audio().decodeAudioData(b))
+    .then(buf => {
+      bgmBuf = buf; bgmLoading = false;
+      if (bgmWanted) bgm.start();      // 로딩 끝나면 밀린 재생 요청 처리
+    })
+    .catch(() => { bgmLoading = false; });   // 실패해도 게임은 그대로 진행
+}
+
+// 한 회차를 예약하고, 다음 회차가 시작될 시각을 돌려준다
+function bgmScheduleOnce(startAt) {
+  const ac = audio();
+  const dur = bgmBuf.duration;
+  const x = Math.min(BGM_XFADE, dur / 3);
+  const src = ac.createBufferSource();
+  src.buffer = bgmBuf;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, startAt);
+  g.gain.linearRampToValueAtTime(1, startAt + x);          // 앞부분 서서히 올라오고
+  g.gain.setValueAtTime(1, startAt + dur - x);
+  g.gain.linearRampToValueAtTime(0.0001, startAt + dur);   // 뒷부분 서서히 빠진다
+  src.connect(g); g.connect(bgmGain());
+  src.start(startAt);
+  src.stop(startAt + dur + 0.05);
+  src.onended = () => { bgmSources = bgmSources.filter(s => s !== src); };
+  bgmSources.push(src);
+  return startAt + dur - x;    // 겹치는 만큼 당겨서 다음 회차 시작
+}
+
+// 몇 초 앞까지 미리 예약해 둬야 끊김 없이 이어진다
+function bgmPump() {
+  if (!bgmBuf) return;
+  const ac = audio();
+  while (bgmNextAt < ac.currentTime + 4) bgmNextAt = bgmScheduleOnce(bgmNextAt);
+}
+
+const bgm = {
+  start: () => {
+    bgmWanted = true;
+    if (!bgmBuf) { loadBgm(); return; }
+    const ac = audio();
+    bgm.stop(0);                       // 이전 재생이 남아 있으면 정리
+    bgmWanted = true;
+    bgmNextAt = ac.currentTime + 0.05;
+    bgmPump();
+    const g = bgmGain().gain;
+    g.cancelScheduledValues(ac.currentTime);
+    g.setValueAtTime(0.0001, ac.currentTime);
+    g.linearRampToValueAtTime(BGM_VOL, ac.currentTime + BGM_FADE);
+    clearInterval(bgmTimer);
+    bgmTimer = setInterval(bgmPump, 1000);
+  },
+  stop: (ms = 900) => {
+    bgmWanted = false;
+    clearInterval(bgmTimer); bgmTimer = null;
+    if (!bgmGainNode) return;
+    const ac = audio(), g = bgmGain().gain;
+    const t = ac.currentTime + ms / 1000;
+    g.cancelScheduledValues(ac.currentTime);
+    g.setValueAtTime(g.value, ac.currentTime);
+    g.linearRampToValueAtTime(0.0001, Math.max(t, ac.currentTime + 0.01));
+    const srcs = bgmSources.slice();
+    bgmSources = [];
+    srcs.forEach(s => { try { s.stop(t + 0.05); } catch (e) {} });
+  },
+  // 음소거 토글 — 켜면 true 반환
+  toggle: () => {
+    if (bgmTimer) { bgm.stop(300); return false; }
+    bgm.start(); return true;
+  },
+};
+
+/* ============================================
    파일 기반 효과음
-   짧은 mp3 클립을 미리 디코딩해 두고 필요할 때 재생한다.
+   짧은 오디오 클립(wav/mp3 모두 가능)을 미리 디코딩해 두고 필요할 때 재생한다.
      vol  : 음량
      from : 클립에서 잘라 쓸 시작 위치(초)
      len  : 재생 길이(초), 0이면 클립 전체
    파일이 없거나 디코딩에 실패하면 각 소리의 합성음으로 자동 대체된다.
    ============================================ */
 const CLIPS = {
-  jump:  { src: 'sfx-jump.mp3',  vol: 0.15, from: 0, len: 0 },   // 1단 점프
-  jump2: { src: 'sfx-jump2.mp3', vol: 0.2,  from: 0, len: 0 },   // 2단 점프
-  lane:  { src: 'sfx-lane.mp3',  vol: 0.05, from: 0, len: 0 },   // 좌우 이동
-  hurt:  { src: 'sfx-hurt.mp3',  vol: 0.35, from: 0, len: 0 },   // 목숨 감소 (그 외는 합성음)
+  jump:  { src: 'sfx-jump.wav',  vol: 0.5,  from: 0, len: 0 },   // 1단 점프
+  jump2: { src: 'sfx-jump2.wav', vol: 0.5,  from: 0, len: 0 },   // 2단 점프
+  slide: { src: 'sfx-slide.wav', vol: 0.5,  from: 0, len: 0 },   // 슬라이딩
+  lane:  { src: 'sfx-lane.wav',  vol: 0.35, from: 0, len: 0 },   // 좌우 이동
+  coin:  { src: 'sfx-coin.wav',  vol: 0.45, from: 0, len: 0 },   // 휴지 획득
+  hurt:  { src: 'sfx-hurt.wav',  vol: 0.5,  from: 0, len: 0 },   // 목숨 감소 (그 외는 합성음)
 };
 
 function loadClips() {
@@ -233,11 +334,16 @@ const sfx = {
     beep(125, 0.16, 'sine', 0.16, -65);
     noise(0.13, 0.1, 'lowpass', 750, 170, 1);
   },
-  // 슬라이딩 — 후보 5종 중 SLIDE_PICK 으로 고름 (↓ slideVariants)
-  slide: () => slideVariants[SLIDE_PICK](),
-  // 좌우 이동 — mp3 클립. 실패하면 기존 합성음으로 대체
+  // 슬라이딩 — 클립. 실패하면 합성음 후보(slideVariants)로 대체
+  slide: () => { if (!playClip('slide')) slideVariants[SLIDE_PICK](); },
+  // 좌우 이동 — 클립. 실패하면 기존 합성음으로 대체
   lane: () => { if (!playClip('lane')) beep(500, 0.06, 'triangle', 0.08); },
-  coin: () => { beep(1180, 0.09, 'square', 0.09); setTimeout(() => beep(1570, 0.12, 'square', 0.09), 60); },
+  // 휴지 획득 — 클립. 실패하면 기존 합성음으로 대체
+  coin: () => {
+    if (playClip('coin')) return;
+    beep(1180, 0.09, 'square', 0.09);
+    setTimeout(() => beep(1570, 0.12, 'square', 0.09), 60);
+  },
   throw: () => beep(950, 0.28, 'sawtooth', 0.06, -600),
 
   // ---------- 피격 ----------

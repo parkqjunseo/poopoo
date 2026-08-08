@@ -125,6 +125,7 @@ function doSlide() {
 }
 window.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  if (e.key === 'm' || e.key === 'M') { bgm.toggle(); return; }   // 배경음악 켜기/끄기
   if (state.mode === 'intro') { startPlay(); return; }
   if (!state.running && (e.key === ' ' || e.key === 'Enter')) { startBtn.click(); return; }
   if (e.key === 'ArrowLeft' || e.key === 'a') moveLane(-1);
@@ -283,6 +284,7 @@ function hitPlayer() {
     respawn();
   } else {
     // 게임오버 연출: 마지막 목숨이 닳는 소리 → 게임오버 음악
+    bgm.stop(700);   // 배경음악을 걷어내야 게임오버 음악이 묻히지 않는다
     sfx.hurt();
     setTimeout(() => sfx.gameOver(), 600);
     state.dead = true; // deadT가 쌓이면 gameOver() 호출
