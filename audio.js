@@ -37,7 +37,7 @@ function master() {
    무한 반복은 곡을 그냥 이어붙이면 이음매에서 뚝 끊기므로,
    한 회차의 끝과 다음 회차의 앞을 서로 겹쳐(크로스페이드) 넘어가게 한다.
    ============================================ */
-const BGM_SRC   = 'bgm-quick-silver-jump.mp3';
+const BGM_SRC   = 'bgm-poopoorun.mp3';
 const BGM_VOL   = 0.3;    // 효과음에 묻히지 않을 정도
 const BGM_FADE  = 1.4;    // 시작·종료 페이드(초)
 const BGM_XFADE = 2.0;    // 반복 이음매에서 겹치는 길이(초)
