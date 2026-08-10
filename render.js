@@ -30,6 +30,47 @@ const DECO_SRC = {
 const DECO_IMG = {};
 for (const k in DECO_SRC) { const im = new Image(); im.src = DECO_SRC[k]; DECO_IMG[k] = im; }
 
+/* ===== 새 배경 에셋(파일 PNG, 상대경로) — 나무/가로등/잔디 교체 =====
+   기존 픽셀아트 대신 새 에셋 사용. bench/trash/flower/pigeon 은 기존 base64 유지.
+   grass1/grass2 키는 새 파일 이미지로 덮어씀. tree1~4·lamp1·lamp2 신규.
+   경로는 index.html 기준 상대경로라 GitHub Pages 에서 정상 로드됨. */
+const ENV_SRC = {
+  tree1: 'env_tree1.png', tree2: 'env_tree2.png', tree3: 'env_tree3.png', tree4: 'env_tree4.png',
+  lamp1: 'env_lamp1.png', lamp2: 'env_lamp2.png',
+  grass1: 'env_grass1.png', grass2: 'env_grass2.png',
+  sun: 'env_sun.png', cloud1: 'env_cloud1.png', cloud2: 'env_cloud2.png', cloud3: 'env_cloud3.png',
+};
+for (const k in ENV_SRC) { const im = new Image(); im.src = ENV_SRC[k]; DECO_IMG[k] = im; }
+
+/* ===== 추격자 캐릭터 스프라이트 (뒷모습, 외형만 교체 · 모션/위치/로직은 기존 그대로) =====
+   기존 CHASERS(config.js)의 shirt 색으로 4종 캐릭터에 매핑. 휴지(TP)는 기존 렌더링 유지. */
+const CHAR_IMG = {};
+{ const S = { blue: 'char_blue.png', green: 'char_green.png', orange: 'char_orange.png', red: 'char_red.png' };
+  for (const k in S) { const im = new Image(); im.src = S[k]; CHAR_IMG[k] = im; } }
+const CHAR_FOOT = { blue: 0.997, green: 0.997, orange: 0.988, red: 0.994 };  // 실제 발바닥 비율
+// CHASERS 의 shirt 색 → 캐릭터 키 (config.js 는 건드리지 않고 여기서 연결)
+const CHASER_CHAR = { '#3f6fd8': 'blue', '#2e9e4f': 'green', '#c542a0': 'red', '#d97b28': 'orange', '#7a54c9': 'blue' };
+
+/* ===== 장애물 PNG 스프라이트 (외형만 교체 · 충돌/생성/판정은 engine.js 그대로) =====
+   log  = 벤치     → 점프로 넘는 장애물
+   bar  = 현수막 게이트 → 슬라이드로 통과하는 장애물
+   wall = 화분(꽃밭) → 좌우 이동으로 피하는 장애물
+   경로는 index.html 기준 상대경로 (GitHub Pages 정상 로드). */
+const OBSTACLE_SRC = {
+  log:  'obstacle_bench.png',
+  bar:  'obstacle_banner_gate.png',
+  wall: 'obstacle_flower_bed.png',
+};
+const OBSTACLE_IMG = {};
+for (const k in OBSTACLE_SRC) { const im = new Image(); im.src = OBSTACLE_SRC[k]; OBSTACLE_IMG[k] = im; }
+// 화면상 "높이" 배율(원근 s 기준). 충돌 판정과 무관 — 보이는 크기만 조절.
+const OBSTACLE_HMUL = { log: 0.40, bar: 0.62, wall: 0.42 };
+// 실제 물체의 "바닥 접점"이 이미지 상단에서 차지하는 세로 비율(0~1).
+// PNG 하단에 거의 보이지 않는 알파 잔여물(투명 여백)이 있어, 이미지 맨 아래가 아니라
+// 이 지점을 도로에 붙여야 장애물이 공중에 뜨지 않는다. (obstacle PNG 알파 실측값)
+//   bench 429/699, banner_gate 455/593, flower_bed 495/803
+const OBSTACLE_FOOT = { log: 0.6137, bar: 0.7673, wall: 0.6164 };
+
 function roundRect(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -46,22 +87,19 @@ function drawSky() {
   const g = ctx.createLinearGradient(0, 0, 0, hy * 1.25);
   g.addColorStop(0, '#5fb2ef'); g.addColorStop(0.7, '#a8d9f7'); g.addColorStop(1, '#e3f4ff');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, hy * 1.25);
-  // sun
-  ctx.fillStyle = 'rgba(255,245,190,0.95)';
-  ctx.beginPath(); ctx.arc(W * 0.82, hy * 0.3, Math.min(W, H) * 0.05, 0, 7); ctx.fill();
-  ctx.fillStyle = 'rgba(255,240,160,0.3)';
-  ctx.beginPath(); ctx.arc(W * 0.82, hy * 0.3, Math.min(W, H) * 0.1, 0, 7); ctx.fill();
-  // drifting clouds
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  // sun (PNG)
+  { const im = DECO_IMG.sun; const S = Math.min(W, H) * 0.22;
+    if (im && im.complete && im.naturalWidth) { const w = S, h = S * im.naturalHeight / im.naturalWidth;
+      ctx.drawImage(im, W * 0.82 - w / 2, hy * 0.3 - h / 2, w, h); } }
+  // drifting clouds (PNG)
+  const CL = [DECO_IMG.cloud1, DECO_IMG.cloud2, DECO_IMG.cloud3];
   for (let i = 0; i < 5; i++) {
-    const cw = Math.min(W, H) * (0.09 + (i % 3) * 0.03);
-    const cx = ((i * 231 + state.t * (10 + i * 3)) % (W + cw * 4)) - cw * 2;
-    const cy = hy * (0.14 + ((i * 53) % 4) * 0.16);
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, cw, cw * 0.38, 0, 0, 7);
-    ctx.ellipse(cx - cw * 0.6, cy + cw * 0.1, cw * 0.6, cw * 0.28, 0, 0, 7);
-    ctx.ellipse(cx + cw * 0.6, cy + cw * 0.12, cw * 0.55, cw * 0.26, 0, 0, 7);
-    ctx.fill();
+    const im = CL[i % 3]; if (!im || !im.complete || !im.naturalWidth) continue;
+    const cw = Math.min(W, H) * (0.26 + (i % 3) * 0.07);
+    const ch = cw * im.naturalHeight / im.naturalWidth;
+    const cx = ((i * 331 + state.t * (10 + i * 3)) % (W + cw * 2)) - cw;
+    const cy = hy * (0.10 + ((i * 53) % 4) * 0.17);
+    ctx.drawImage(im, cx - cw / 2, cy - ch / 2, cw, ch);
   }
   // distant tree lines (two layers)
   ctx.fillStyle = '#8fc47e';
@@ -116,36 +154,88 @@ function drawGround() {
 }
 
 // ---------- 길가 장식 (나무/가로등/꽃덤불) ----------
-function drawDecoImg(img, x, z, hf, flyY, flip, rot) {
+// 각 데코 PNG의 "실제 바닥선"이 이미지 상단에서 차지하는 세로 비율(0~1). PNG 하단의
+// 투명 여백(안 보이는 알파) 때문에 이미지 맨 아래를 지면에 붙이면 공중에 뜬다 → 이 값으로
+// 실제 바닥을 p.y 에 맞춘다. (base64 데코 알파 실측값. 나무/가로등은 ≈1.0 이라 사실상 변화 없음)
+const DECO_FOOT = {
+  bench1: 0.717, bench2: 0.725,
+  flower1: 0.699, flower2: 0.775, flower3: 0.646, flower4: 0.857, flower5: 0.682,
+  grass1: 0.957, grass2: 0.950,
+  trash: 0.821, pigeon1: 0.767, pigeon2: 0.80, pigeon3: 0.721,
+  // 새 에셋(트림+알파 실측) — 값 ≈1.0 이라 바닥 접지가 거의 정확
+  tree1: 0.988, tree2: 1.0, tree3: 0.998, tree4: 0.998,
+  lamp1: 0.986, lamp2: 0.981,
+};
+function drawDecoImg(img, x, z, hf, flyY, flip, rot, foot) {
   if (!img || !img.complete || !img.naturalWidth) return;
   const p = screenPos(x, z, flyY || 0);
   const s = p.f * Math.min(W, H);
   if (s < 4) return;
   const h = s * hf;
   const w = h * (img.naturalWidth / img.naturalHeight);
-  if (!flyY) { // 지면 데코엔 옅은 그림자
+  // 실제 바닥 비율. 날아다니는 데코(flyY)는 지면 접지 개념이 없으므로 1.0(=이미지 그대로).
+  const ff = flyY ? 1 : (foot || 1);
+  if (!flyY) { // 지면 데코엔 옅은 그림자 (실제 바닥 = p.y 위치에)
     const a = ctx.globalAlpha;
     ctx.globalAlpha = a * 0.16; ctx.fillStyle = '#1f4d12';
-    ctx.beginPath(); ctx.ellipse(p.x, p.y - h * 0.02, w * 0.34, h * 0.055, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, w * 0.34, (ff * h) * 0.05, 0, 0, 7); ctx.fill();
     ctx.globalAlpha = a;
   }
   ctx.save();
   ctx.translate(p.x, p.y);
   if (rot) ctx.rotate(rot);
   ctx.scale(flip ? -1 : 1, 1);
-  ctx.drawImage(img, -w / 2, -h, w, h);
+  // 실제 바닥선(ff)을 원점(p.y=지면)에 맞춘다. 하단 투명 여백만 p.y 아래로 내려감.
+  ctx.drawImage(img, -w / 2, -ff * h, w, h);
   ctx.restore();
 }
 
+// 배경 장식(장애물 아님, 충돌 없음)의 크기 배율. 기존 z·원근·hf 위에 곱하기만 한다.
+// 상대 크기: 나무 > 가로등 > 벤치/쓰레기통 > 꽃/잔디/비둘기.
+// ⚠️ bench1/bench2 는 "배경 벤치"다. 장애물 벤치(OBSTACLE_IMG.log)와 완전히 별개.
+// 한 곳에서 값만 바꾸면 각 오브젝트 크기가 조절된다.
+const ENV_SCALE = {
+  tree1: 1.55, tree2: 1.5, tree3: 1.5, tree4: 1.55,   // 나무: 공원 가로수처럼 크고 풍성
+  lamp1: 1.3, lamp2: 1.35,                             // 가로등: 산책로 가로등 크기
+  bench1: 1.5, bench2: 1.5,                            // 배경 벤치: 사람이 앉을 만한 크기
+  trash: 1.3,                                          // 쓰레기통
+  grass1: 1.4, grass2: 1.4,                            // 잔디
+  // flower1~5 / pigeon1~3 : 아래 drawDeco 의 기본값 1.4 사용
+};
+const ENV_SCALE_DEFAULT = 1.4;                          // 꽃·비둘기 등 미지정 데코 기본 배율
 function drawDeco(d) {
-  drawDecoImg(DECO_IMG[d.img], d.x, d.z, d.hf, d.flyY, d.flip, d.rot);
+  const m = ENV_SCALE[d.img] || ENV_SCALE_DEFAULT;      // 지정 없으면 1.4
+  const foot = DECO_FOOT[d.img] || 1;                    // 실제 바닥선 비율(없으면 1.0)
+  // hf(=높이 비율)에만 배율 → 스프라이트가 바닥 접지를 유지한 채 전체가 균일 확대됨
+  drawDecoImg(DECO_IMG[d.img], d.x, d.z, d.hf * m, d.flyY, d.flip, d.rot, foot);
 }
 
-// ---------- 장애물 (벤치/현수막/덤불 울타리) ----------
+// ---------- 장애물 (벤치 PNG / 현수막 게이트 PNG / 꽃밭 PNG) ----------
+// 외형만 PNG로 교체. 위치·크기는 기존과 동일한 screenPos()/원근 s 를 사용하므로
+// 멀면 작게·가까우면 크게 보이고, 레인 위치도 그대로다. 충돌은 engine.js 소관(불변).
 function drawObstacle(o) {
   const p = screenPos(LANE_X[o.lane], o.z);
   const s = p.f * Math.min(W, H);
   if (s < 3) return;
+
+  const img = OBSTACLE_IMG[o.type];
+  if (img && img.complete && img.naturalWidth) {
+    const h = s * (OBSTACLE_HMUL[o.type] || 0.40);
+    const w = h * (img.naturalWidth / img.naturalHeight);
+    // 실제 물체 바닥(footFrac)을 도로 p.y 에 맞춘다. 이미지 하단의 투명 잔여물만큼
+    // p.y 아래로 내려가므로 물체 자체는 도로에 정확히 접지된다(공중에 뜨지 않음).
+    const foot = OBSTACLE_FOOT[o.type] || 1;   // 이미지 상단~실제 바닥까지의 비율
+    const topY = p.y - foot * h;               // 이미지 상단 y (하단은 p.y+(1-foot)*h)
+    // 지면 접지 그림자 (실제 바닥 = p.y 위치에)
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * 0.16; ctx.fillStyle = '#1f4d12';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, w * 0.40, (foot * h) * 0.045, 0, 0, 7); ctx.fill();
+    ctx.globalAlpha = a;
+    ctx.drawImage(img, p.x - w / 2, topY, w, h);
+    return;
+  }
+
+  // ── 폴백: PNG 로딩 완료 전에도 게임이 깨지지 않도록 기존 벡터 그림 유지 ──
   const w = s * 0.34;
   if (o.type === 'log') { // park bench — jump over
     ctx.fillStyle = '#2e5e46';
@@ -598,7 +688,25 @@ function drawChasers() {
     ctx.save();
     ctx.translate(p.x, p.y - bob);
     ctx.lineCap = 'round';
-    // legs
+    const img = CHAR_IMG[CHASER_CHAR[c.shirt] || 'blue'];
+    if (img && img.complete && img.naturalWidth) {
+      // 새 캐릭터(뒷모습) — 발끝을 원점(지면)에 접지. 크기는 기존 u 기준으로 맞춤.
+      const HH = u * 7.2;
+      const w = HH * (img.naturalWidth / img.naturalHeight);
+      const foot = CHAR_FOOT[CHASER_CHAR[c.shirt] || 'blue'] || 1;
+      ctx.drawImage(img, -w / 2, -foot * HH, w, HH);
+      // 튀는 땀방울 (기존 모션 유지)
+      ctx.fillStyle = 'rgba(126,199,242,0.9)';
+      for (const sd of [-1, 1]) {
+        const f = (state.t * 3 + c.ph * 0.7) % 1;
+        ctx.beginPath();
+        ctx.arc(sd * u * (1.3 + f * 1.1), -u * (6.8 + f * 0.8), u * 0.16 * (1 - f), 0, 7);
+        ctx.fill();
+      }
+      ctx.restore();
+      continue;
+    }
+    // ── 폴백: 이미지 로딩 전 기존 벡터 캐릭터 ──
     ctx.strokeStyle = c.pants; ctx.lineWidth = u * 0.9;
     const la = Math.sin(run) * 0.9;
     ctx.beginPath();
