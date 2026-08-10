@@ -9,12 +9,15 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-let W = 900, H = 600;
+// 논리 해상도 고정 — 시작화면/게임오버와 동일한 세로형 카드 비율(1384:1536).
+// 실제 표시 크기는 style.css 가 비율을 유지한 채 축소/확대(레터박스)한다.
+const LOGICAL_W = 1384, LOGICAL_H = 1536;
+let W = LOGICAL_W, H = LOGICAL_H;
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  W = window.innerWidth; H = window.innerHeight;
+  W = LOGICAL_W; H = LOGICAL_H;                 // 원근 투영 기준을 항상 1384×1536 로 고정
   canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  // canvas.style.width/height 는 지정하지 않음 → CSS 의 aspect-ratio/width 규칙이 표시 크기를 담당
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 window.addEventListener('resize', resize);

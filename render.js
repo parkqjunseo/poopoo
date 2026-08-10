@@ -64,7 +64,7 @@ const OBSTACLE_SRC = {
 const OBSTACLE_IMG = {};
 for (const k in OBSTACLE_SRC) { const im = new Image(); im.src = OBSTACLE_SRC[k]; OBSTACLE_IMG[k] = im; }
 // 화면상 "높이" 배율(원근 s 기준). 충돌 판정과 무관 — 보이는 크기만 조절.
-const OBSTACLE_HMUL = { log: 0.40, bar: 0.62, wall: 0.42 };
+const OBSTACLE_HMUL = { log: 0.5, bar: 0.58, wall: 0.5 };
 // 실제 물체의 "바닥 접점"이 이미지 상단에서 차지하는 세로 비율(0~1).
 // PNG 하단에 거의 보이지 않는 알파 잔여물(투명 여백)이 있어, 이미지 맨 아래가 아니라
 // 이 지점을 도로에 붙여야 장애물이 공중에 뜨지 않는다. (obstacle PNG 알파 실측값)
