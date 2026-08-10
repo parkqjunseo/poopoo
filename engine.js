@@ -19,10 +19,15 @@ const INVULN_TIME = 2.0;       // 부활 후 무적 시간(초)
 // 판정 구간(z 폭 1.5)을 지나는 동안 높이가 오르내리므로, 기준선은 그 구간의 최저점보다
 // 넉넉히 아래에 둬야 "정점은 넘었는데 끝자락에서 걸리는" 일이 없다.
 const GRAVITY    = 8.5;
-const JUMP_V1    = 1.75;       // 1단 점프 → 정점 0.43
+const JUMP_V1    = 1.75;       // 1단 점프 → 정점 0.45~0.54 (프레임레이트에 따라, 아래 참고)
 const JUMP2_PEAK = 0.9;        // 2단 점프 도달 높이(고정). 현수막 천 윗단(y≈1.03)보다 낮게
 const H_BENCH    = 0.25;       // 나무의자 — 1단 점프로 통과
-const H_PLANT    = 0.55;       // 화분 — 1단으로는 못 넘고 2단이라야 통과
+// 화분 — 1단으로는 못 넘고 2단이라야 통과.
+// ⚠️ 오일러 적분이라 dt가 커질수록 1단 정점이 올라간다(실측):
+//    120fps 0.450 · 60fps 0.468 · 30fps 0.504 · 20fps 0.540 (dt 상한 0.05가 최악값)
+//    0.55 로 두면 저프레임에서 여유가 0.01(2%)밖에 없어 사실상 넘길락 말락 한다.
+//    최악값 0.540 위로 넉넉히, 2단 정점(0.951) 아래로 충분히 → 0.62
+const H_PLANT    = 0.62;
 
 // ---------- 휴지 투척 밸런스 ----------
 const THROW_WARN  = 0.9;       // 빨간 경고 박스가 먼저 떠 있는 시간(초)
@@ -257,7 +262,8 @@ function update(dt) {
   if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 3);
 
   // advance world
-  for (const o of obstacles) o.z -= dz;
+  // zPrev = 이번 프레임에 이동하기 직전 위치. 아래 충돌 판정에서 "지나간 구간"을 훑는 데 쓴다.
+  for (const o of obstacles) { o.zPrev = o.z; o.z -= dz; }
   for (const c of coinsArr) c.z -= dz;
   for (const d of decos) d.z -= dz;
   obstacles = obstacles.filter(o => o.z > -3);
@@ -272,9 +278,15 @@ function update(dt) {
   while (nextDecoZ < DRAW_FAR) { spawnDeco(DRAW_FAR); nextDecoZ += 2.2; }
 
   // collisions (player at z≈PLAYER_Z) — 무적 중에는 통과
+  // ⚠️ 판정 창(폭 1.5)을 "현재 z"로만 보면, 한 프레임 이동량 dz 가 창보다 커질 때
+  //    장애물이 창을 통째로 건너뛰어 충돌이 아예 검사되지 않는다(터널링).
+  //    dz = speed*dt 이고 dt 상한이 0.05, 후반 speed 46 → dz 2.3 > 1.5 이라 실제로 발생한다.
+  //    (실측: 20fps·speed 43 에서 위상에 따라 60번 중 13번이 그냥 통과됨 — 점프 여부와 무관)
+  //    그래서 zPrev→z 로 지나간 구간이 창과 겹치는지로 판정한다.
   if (state.invuln <= 0) {
     for (const o of obstacles) {
-      if (o.z > PLAYER_Z - 0.8 && o.z < PLAYER_Z + 0.7 && Math.abs(LANE_X[o.lane] - state.laneX) < 0.55) {
+      const zPrev = o.zPrev ?? o.z;   // 갓 스폰된 장애물은 아직 zPrev 가 없다(멀리 있어 무해하지만 안전하게)
+      if (o.z < PLAYER_Z + 0.7 && zPrev > PLAYER_Z - 0.8 && Math.abs(LANE_X[o.lane] - state.laneX) < 0.55) {
         let hit = false;
         if (o.type === 'log') hit = state.y < H_BENCH;          // 나무의자 — 1단 점프
         else if (o.type === 'bar') hit = state.sliding <= 0;    // 현수막 — 오직 슬라이딩

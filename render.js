@@ -43,13 +43,21 @@ const ENV_SRC = {
 for (const k in ENV_SRC) { const im = new Image(); im.src = ENV_SRC[k]; DECO_IMG[k] = im; }
 
 /* ===== 추격자 캐릭터 스프라이트 (뒷모습, 외형만 교체 · 모션/위치/로직은 기존 그대로) =====
-   기존 CHASERS(config.js)의 shirt 색으로 4종 캐릭터에 매핑. 휴지(TP)는 기존 렌더링 유지. */
+   기존 CHASERS(config.js)의 shirt 색으로 5종 캐릭터에 매핑. 휴지(TP)는 기존 렌더링 유지.
+   파랑/초록/빨강 = 휴지를 든 추격자, 주황/보라 = 급똥 참는 포즈(휴지·땀방울이 그림에 포함). */
 const CHAR_IMG = {};
-{ const S = { blue: 'char_blue.png', green: 'char_green.png', orange: 'char_orange.png', red: 'char_red.png' };
+{ const S = { blue: 'char_blue.png', green: 'char_green.png', orange: 'char_orange.png',
+              red: 'char_red.png', purple: 'char_purple.png' };
   for (const k in S) { const im = new Image(); im.src = S[k]; CHAR_IMG[k] = im; } }
-const CHAR_FOOT = { blue: 0.997, green: 0.997, orange: 0.988, red: 0.994 };  // 실제 발바닥 비율
+// 실제 발바닥 비율 — 이미지 상단에서 발끝까지가 전체 높이의 몇 %인지 (PNG 알파 실측)
+const CHAR_FOOT = { blue: 0.813, green: 0.936, orange: 0.781, red: 0.930, purple: 0.765 };
+// 사람 비율 — 머리끝~발끝이 이미지 전체 높이의 몇 %인지 (PNG 알파 실측).
+// ⚠️ 이 에셋들은 투명 여백이 제각각(0.62~0.89)이라, 이미지 높이를 그대로 쓰면
+//    캐릭터마다 화면상 키가 달라진다. 아래 drawChasers 에서 이 값으로 역산해 키를 맞춘다.
+//    (들어올린 팔·땀방울은 머리 위로 삐져나오므로 키 기준에서 제외됨)
+const CHAR_BODY = { blue: 0.662, green: 0.889, orange: 0.649, red: 0.798, purple: 0.620 };
 // CHASERS 의 shirt 색 → 캐릭터 키 (config.js 는 건드리지 않고 여기서 연결)
-const CHASER_CHAR = { '#3f6fd8': 'blue', '#2e9e4f': 'green', '#c542a0': 'red', '#d97b28': 'orange', '#7a54c9': 'blue' };
+const CHASER_CHAR = { '#3f6fd8': 'blue', '#2e9e4f': 'green', '#c542a0': 'red', '#d97b28': 'orange', '#7a54c9': 'purple' };
 
 /* ===== 장애물 PNG 스프라이트 (외형만 교체 · 충돌/생성/판정은 engine.js 그대로) =====
    log  = 벤치     → 점프로 넘는 장애물
@@ -64,7 +72,11 @@ const OBSTACLE_SRC = {
 const OBSTACLE_IMG = {};
 for (const k in OBSTACLE_SRC) { const im = new Image(); im.src = OBSTACLE_SRC[k]; OBSTACLE_IMG[k] = im; }
 // 화면상 "높이" 배율(원근 s 기준). 충돌 판정과 무관 — 보이는 크기만 조절.
-const OBSTACLE_HMUL = { log: 0.5, bar: 0.58, wall: 0.5 };
+// wall(화분) 0.5 → 0.55 : 벤치와 보이는 높이가 똑같아서(둘 다 월드y 0.81) 1단짜리인지
+//   2단짜리인지 눈으로 구분이 안 됐다. 화분만 10% 키워 0.895 로 벌린다.
+//   ⚠️ 더 올리지 말 것 — 2단으로 아슬하게 넘는 판의 플레이어 최저 높이가 0.628(실측)이라,
+//      화분을 더 키우면 "넘었는데 뚫고 지나가는" 그림이 눈에 띄게 된다.
+const OBSTACLE_HMUL = { log: 0.5, bar: 0.58, wall: 0.55 };
 // 실제 물체의 "바닥 접점"이 이미지 상단에서 차지하는 세로 비율(0~1).
 // PNG 하단에 거의 보이지 않는 알파 잔여물(투명 여백)이 있어, 이미지 맨 아래가 아니라
 // 이 지점을 도로에 붙여야 장애물이 공중에 뜨지 않는다. (obstacle PNG 알파 실측값)
@@ -688,12 +700,15 @@ function drawChasers() {
     ctx.save();
     ctx.translate(p.x, p.y - bob);
     ctx.lineCap = 'round';
-    const img = CHAR_IMG[CHASER_CHAR[c.shirt] || 'blue'];
+    const ck = CHASER_CHAR[c.shirt] || 'blue';
+    const img = CHAR_IMG[ck];
     if (img && img.complete && img.naturalWidth) {
-      // 새 캐릭터(뒷모습) — 발끝을 원점(지면)에 접지. 크기는 기존 u 기준으로 맞춤.
-      const HH = u * 7.2;
+      // 새 캐릭터(뒷모습) — 발끝을 원점(지면)에 접지.
+      // 화면상 "사람 키"를 7.09u 로 고정한다(여백 없던 기존 에셋의 7.2u × 사람비율 0.985와 동일).
+      // 에셋마다 투명 여백이 달라 이미지 전체 높이 HH 는 사람 비율로 역산해야 키가 일정해진다.
+      const HH = u * 7.09 / (CHAR_BODY[ck] || 1);
       const w = HH * (img.naturalWidth / img.naturalHeight);
-      const foot = CHAR_FOOT[CHASER_CHAR[c.shirt] || 'blue'] || 1;
+      const foot = CHAR_FOOT[ck] || 1;
       ctx.drawImage(img, -w / 2, -foot * HH, w, HH);
       // 튀는 땀방울 (기존 모션 유지)
       ctx.fillStyle = 'rgba(126,199,242,0.9)';
