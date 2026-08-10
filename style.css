@@ -251,3 +251,34 @@ canvas#game {
 #livesBox .heart.lost { opacity: .18; filter: grayscale(1); }
 @keyframes livesHurt { 0%,100%{transform:none} 25%{transform:translateX(-3px)} 75%{transform:translateX(3px)} }
 #livesBox.hurt { animation: livesHurt .3s; }
+
+/* ---------- 조작법 모달 (이미지 한 장 + X 닫기 버튼) ---------- */
+.howtoWrap{
+  position: relative; line-height: 0;
+  animation: howtoPop .3s cubic-bezier(.2,1.25,.4,1) both;
+}
+.howtoArt{
+  display: block; height: auto; width: auto;
+  max-height: 86dvh; max-width: 88vw;
+  border-radius: clamp(10px, 2.2vmin, 22px);
+  box-shadow: 0 16px 40px rgba(0,0,0,.5);
+}
+/* X 버튼: 이미지 우상단 모서리에 살짝 걸치게 */
+.howtoClose{
+  position: absolute; top: 0; right: 0;
+  transform: translate(38%, -38%);
+  width: clamp(38px, 7.5%, 68px); aspect-ratio: 382 / 574;
+  background: none; border: 0; padding: 0; cursor: pointer; line-height: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .08s ease, filter .08s ease;
+}
+.howtoClose img{
+  width: 100%; height: 100%; object-fit: contain; display: block;
+  filter: drop-shadow(0 3px 7px rgba(0,0,0,.45));
+}
+.howtoClose:hover{ filter: brightness(1.07); }
+.howtoClose:active{ transform: translate(38%, -38%) scale(.9); }
+@keyframes howtoPop{
+  from{ opacity:0; transform: scale(.92); }
+  to  { opacity:1; transform: scale(1); }
+}
