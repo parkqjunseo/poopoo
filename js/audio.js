@@ -37,7 +37,7 @@ function master() {
    무한 반복은 곡을 그냥 이어붙이면 이음매에서 뚝 끊기므로,
    한 회차의 끝과 다음 회차의 앞을 서로 겹쳐(크로스페이드) 넘어가게 한다.
    ============================================ */
-const BGM_SRC   = 'bgm-poopoorun.mp3';
+const BGM_SRC   = 'assets/audio/bgm-poopoorun.mp3';
 const BGM_VOL   = 0.3;    // 효과음에 묻히지 않을 정도
 const BGM_FADE  = 1.4;    // 시작·종료 페이드(초)
 const BGM_XFADE = 2.0;    // 반복 이음매에서 겹치는 길이(초)
@@ -140,12 +140,12 @@ const bgm = {
    파일이 없거나 디코딩에 실패하면 각 소리의 합성음으로 자동 대체된다.
    ============================================ */
 const CLIPS = {
-  jump:  { src: 'sfx-jump.wav',  vol: 0.5,  from: 0, len: 0 },   // 1단 점프
-  jump2: { src: 'sfx-jump2.wav', vol: 0.5,  from: 0, len: 0 },   // 2단 점프
-  slide: { src: 'sfx-slide.wav', vol: 0.5,  from: 0, len: 0 },   // 슬라이딩
-  lane:  { src: 'sfx-lane.wav',  vol: 0.35, from: 0, len: 0 },   // 좌우 이동
-  coin:  { src: 'sfx-coin.wav',  vol: 0.45, from: 0, len: 0 },   // 휴지 획득
-  hurt:  { src: 'sfx-hurt.wav',  vol: 0.5,  from: 0, len: 0 },   // 목숨 감소 (그 외는 합성음)
+  jump:  { src: 'assets/audio/sfx-jump.wav',  vol: 0.5,  from: 0, len: 0 },   // 1단 점프
+  jump2: { src: 'assets/audio/sfx-jump2.wav', vol: 0.5,  from: 0, len: 0 },   // 2단 점프
+  slide: { src: 'assets/audio/sfx-slide.wav', vol: 0.5,  from: 0, len: 0 },   // 슬라이딩
+  lane:  { src: 'assets/audio/sfx-lane.wav',  vol: 0.35, from: 0, len: 0 },   // 좌우 이동
+  coin:  { src: 'assets/audio/sfx-coin.wav',  vol: 0.45, from: 0, len: 0 },   // 휴지 획득
+  hurt:  { src: 'assets/audio/sfx-hurt.wav',  vol: 0.5,  from: 0, len: 0 },   // 목숨 감소 (그 외는 합성음)
 };
 
 function loadClips() {

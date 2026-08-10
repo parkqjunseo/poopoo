@@ -139,7 +139,7 @@ canvas#game {
 /* 전체 블러 배경 (게임 캔버스가 양옆으로 비치지 않게) */
 .goBackdrop{
   position:absolute; inset:0; z-index:0;
-  background:url('background1.png') center/cover;
+  background:url('../assets/images/backgrounds/background1.png') center/cover;
   filter:blur(34px) brightness(.5) saturate(1.2);
   transform:scale(1.15);
 }

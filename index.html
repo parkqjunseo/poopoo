@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Titan+One&family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <!-- =========================================
@@ -49,12 +49,12 @@
     <div class="goBackdrop go-only"></div>
     <div class="goScene go-only">
       <!-- 1) 전체 배경 -->
-      <img class="goBg" src="background1.png" alt="">
+      <img class="goBg" src="assets/images/backgrounds/background1.png" alt="">
       <div class="goScrim"></div>
 
       <!-- 2) 게임오버 패널 (textimage.png = 로고+문구+빈 슬롯이 그려진 통짜 아트) -->
       <div class="goPanel">
-        <img class="goPanelArt" src="textimage.png" alt="GAME OVER">
+        <img class="goPanelArt" src="assets/images/ui/textimage.png" alt="GAME OVER">
 
         <!-- 엔진이 갱신하는 메시지: 아트에 문구가 내장돼 있어 기본 숨김 -->
         <p class="goSub" id="ovMsg"></p>
@@ -68,7 +68,7 @@
 
       <!-- 4) 재시작 버튼 -->
       <button class="goRetry" id="retryBtn" aria-label="다시하기">
-        <img src="retry_button.png" alt="다시하기">
+        <img src="assets/images/ui/retry_button.png" alt="다시하기">
       </button>
     </div>
     
@@ -77,9 +77,9 @@
   <!-- 모달: 조작법 (how_box.png = 안내가 전부 그려진 통짜 아트 · 기록 모달과 같은 틀) -->
   <div id="controlsPanel" class="modal">
     <div class="boxWrap">
-      <img class="boxArt" src="how_box.png" alt="조작법 안내">
+      <img class="boxArt" src="assets/images/ui/how_box.png" alt="조작법 안내">
       <button id="controlsClose" class="boxClose" aria-label="닫기">
-        <img src="close-button.png" alt="">
+        <img src="assets/images/ui/close-button.png" alt="">
       </button>
     </div>
   </div>
@@ -87,7 +87,7 @@
   <!-- 모달: 기록 (record_box.png = 캐릭터·라벨·문구가 그려진 통짜 아트 + 값 오버레이) -->
   <div id="recordsPanel" class="modal">
     <div class="boxWrap">
-      <img class="boxArt" src="record_box.png" alt="최고 기록">
+      <img class="boxArt" src="assets/images/ui/record_box.png" alt="최고 기록">
 
       <!-- 아트의 빈 슬롯 위에 실제 값 오버레이 -->
       <div class="recScore" id="recScore">0</div>
@@ -99,7 +99,7 @@
       <div id="recBody" class="recEmpty hidden">아직 기록이 없어요!</div>
 
       <button id="recordsClose" class="boxClose" aria-label="닫기">
-        <img src="close-button.png" alt="">
+        <img src="assets/images/ui/close-button.png" alt="">
       </button>
     </div>
   </div>
@@ -108,12 +108,12 @@
 <!-- 로드 순서: config → view → audio → render → engine → ui -->
 
 <!-- 🎨 A담당 UI 연출: 버튼·모달·게임오버 점수판 (state는 읽기만) -->
-  <script src="config.js"></script>
-  <script src="view.js"></script>
-  <script src="audio.js"></script>
-  <script src="render.js"></script>
-  <script src="engine.js"></script>
-  <script src="ui.js"></script>
-  <script src="main.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/view.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

@@ -35,10 +35,10 @@ for (const k in DECO_SRC) { const im = new Image(); im.src = DECO_SRC[k]; DECO_I
    grass1/grass2 키는 새 파일 이미지로 덮어씀. tree1~4·lamp1·lamp2 신규.
    경로는 index.html 기준 상대경로라 GitHub Pages 에서 정상 로드됨. */
 const ENV_SRC = {
-  tree1: 'env_tree1.png', tree2: 'env_tree2.png', tree3: 'env_tree3.png', tree4: 'env_tree4.png',
-  lamp1: 'env_lamp1.png', lamp2: 'env_lamp2.png',
-  grass1: 'env_grass1.png', grass2: 'env_grass2.png',
-  sun: 'env_sun.png', cloud1: 'env_cloud1.png', cloud2: 'env_cloud2.png', cloud3: 'env_cloud3.png',
+  tree1: 'assets/images/environment/env_tree1.png', tree2: 'assets/images/environment/env_tree2.png', tree3: 'assets/images/environment/env_tree3.png', tree4: 'assets/images/environment/env_tree4.png',
+  lamp1: 'assets/images/environment/env_lamp1.png', lamp2: 'assets/images/environment/env_lamp2.png',
+  grass1: 'assets/images/environment/env_grass1.png', grass2: 'assets/images/environment/env_grass2.png',
+  sun: 'assets/images/environment/env_sun.png', cloud1: 'assets/images/environment/env_cloud1.png', cloud2: 'assets/images/environment/env_cloud2.png', cloud3: 'assets/images/environment/env_cloud3.png',
 };
 for (const k in ENV_SRC) { const im = new Image(); im.src = ENV_SRC[k]; DECO_IMG[k] = im; }
 
@@ -46,8 +46,8 @@ for (const k in ENV_SRC) { const im = new Image(); im.src = ENV_SRC[k]; DECO_IMG
    기존 CHASERS(config.js)의 shirt 색으로 5종 캐릭터에 매핑. 휴지(TP)는 기존 렌더링 유지.
    파랑/초록/빨강 = 휴지를 든 추격자, 주황/보라 = 급똥 참는 포즈(휴지·땀방울이 그림에 포함). */
 const CHAR_IMG = {};
-{ const S = { blue: 'char_blue.png', green: 'char_green.png', orange: 'char_orange.png',
-              red: 'char_red.png', purple: 'char_purple.png' };
+{ const S = { blue: 'assets/images/characters/char_blue.png', green: 'assets/images/characters/char_green.png', orange: 'assets/images/characters/char_orange.png',
+              red: 'assets/images/characters/char_red.png', purple: 'assets/images/characters/char_purple.png' };
   for (const k in S) { const im = new Image(); im.src = S[k]; CHAR_IMG[k] = im; } }
 // 실제 발바닥 비율 — 이미지 상단에서 발끝까지가 전체 높이의 몇 %인지 (PNG 알파 실측)
 const CHAR_FOOT = { blue: 0.813, green: 0.936, orange: 0.781, red: 0.930, purple: 0.765 };
@@ -65,9 +65,9 @@ const CHASER_CHAR = { '#3f6fd8': 'blue', '#2e9e4f': 'green', '#c542a0': 'red', '
    wall = 화분(꽃밭) → 좌우 이동으로 피하는 장애물
    경로는 index.html 기준 상대경로 (GitHub Pages 정상 로드). */
 const OBSTACLE_SRC = {
-  log:  'obstacle_bench.png',
-  bar:  'obstacle_banner_gate.png',
-  wall: 'obstacle_flower_bed.png',
+  log:  'assets/images/obstacles/obstacle_bench.png',
+  bar:  'assets/images/obstacles/obstacle_banner_gate.png',
+  wall: 'assets/images/obstacles/obstacle_flower_bed.png',
 };
 const OBSTACLE_IMG = {};
 for (const k in OBSTACLE_SRC) { const im = new Image(); im.src = OBSTACLE_SRC[k]; OBSTACLE_IMG[k] = im; }
