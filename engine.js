@@ -65,62 +65,81 @@ function reset() {
   state.lives = MAX_LIVES; state.invuln = 0; state.hurtT = 0;
   obstacles = []; coinsArr = []; decos = []; throwsArr = [];
   nextSpawnZ = 30; nextDecoZ = 2; nextThrowT = 3; lastStepIdx = 0;
-  for (let z = 2; z < DRAW_FAR; z += 2.2) spawnDeco(z);
-  nextDecoZ = DRAW_FAR;
+  let dz0 = 2;
+  for (; dz0 < DRAW_FAR; dz0 += 2.2) spawnDeco(dz0);
+  nextDecoZ = dz0;          // 초기 배치의 격자를 그대로 이어받아야 줄 간격이 안 어긋난다
 }
 
-/* [데코] 정돈된 일자 산책로 배치 (장식 전용 · 충돌/게임플레이 무관)
-   - 나무 빈도를 낮추고, 각 오브젝트를 도로 바깥 "일정 밴드"에 좌우 번갈아 배치해
-     길을 따라 이어지는 가로수길처럼 보이게 한다. 좌우는 완전 대칭이 아니라 살짝 다르게.
-   - obstacles/충돌/스폰규칙 등 게임 로직은 전혀 건드리지 않는다(장식 배열 decos 만 채움). */
+/* [데코] 산책로 양옆 "줄 맞춤" 배치 (장식 전용 · 충돌/게임플레이 무관)
+   종류마다 도로 중심에서의 거리(밴드)를 고정한다 → 원근 때문에 지평선 한 점으로 수렴하는
+   곧은 줄이 되어 가로수길처럼 보인다. 위치·크기·좌우·종류를 전부 카운터 t 로 결정하는 게 핵심:
+   난수를 쓰면 같은 종류가 제각각 흩어져(예전 x 가 2.6~3.2 사이 랜덤) 줄이 무너지고 산만해진다.
+     ⚠️ 도로 가장자리는 |x| = 1/0.62 ≈ 1.61 (screenPos 의 0.62 계수) → 모든 밴드는 그 바깥에 둔다.
+     ⚠️ z 도 흔들지 않는다. 예전 zJ() 가 ±2.2 범위로 흩뿌려 깊이 방향 줄도 어긋나 있었다.
+   obstacles/충돌/스폰규칙 등 게임 로직은 전혀 건드리지 않는다(장식 배열 decos 만 채움). */
+const DECO_BAND = {          // 도로 중심에서의 거리 — 가까운 것부터 바깥으로
+  edge: 1.63,   // 꽃·잔디의 "안쪽 끝"이 놓일 선 (중심이 아님 — 아래 DECO_INSET 참고)
+  lamp: 2.00,   // 가로등
+  prop: 2.35,   // 쓰레기통
+  bird: 2.65,   // 비둘기
+  tree: 3.05,   // 가로수
+  far:  4.35,   // 먼 나무 (깊이감용)
+};
+/* 꽃·잔디는 스프라이트 폭이 제각각(레인 단위 0.56~1.20)이라 중심을 같은 밴드에 두면
+   넓은 풀숲만 도로 안으로 파고든다(grass2 는 안쪽 끝이 1.18 까지 들어와 레인을 침범했다).
+   그래서 "중심"이 아니라 "안쪽 끝"을 DECO_BAND.edge 선에 맞춘다 → 길가에 곧은 화단 띠가 된다.
+   값 = 스프라이트 중심에서 안쪽 끝까지의 거리(레인 단위, 알파 실측 · 원근과 무관한 상수).
+   ⚠️ hf(크기)를 바꾸면 이 값도 같이 바뀌므로 다시 재야 한다.
+   (도로 가장자리 = 1/0.62 ≈ 1.613, 주행 레인 바깥 경계 = 1.5) */
+const DECO_INSET = {
+  flower1: 0.352, flower2: 0.333, flower3: 0.265, flower4: 0.552, flower5: 0.512,
+  grass1: 0.444, grass2: 0.604,
+};
 function spawnDeco(zBase) {
-  const R = Math.random;
-  const rnd = (a, b) => a + R() * (b - a);
-  const chance = (p) => R() < p;
-  const pick = (a) => a[(R() * a.length) | 0];
-  const zJ = () => Math.max(0.3, zBase - R() * 2.2);
   const FLW = ['flower1', 'flower2', 'flower3', 'flower4', 'flower5'];
   const GRS = ['grass1', 'grass2'];
   const TREES = ['tree1', 'tree2', 'tree3', 'tree4'];
+  const B = DECO_BAND;
+  const z = zBase;                                      // 흔들지 않음 — 호출 간격(2.2z)이 곧 줄 간격
   const t = (spawnDeco._t = (spawnDeco._t || 0) + 1);   // 배치 리듬용 카운터(장식 전용)
 
-  // ── 나무: 빈도 낮게 · 좌우 번갈아 · 도로 바깥 밴드(|x|≈2.6~3.2)에 일렬 ──
-  //   2호출마다 1그루(≈4.4z), 좌우 번갈이 → 한쪽 기준 ≈8.8z 간격의 여유로운 가로수길
-  if (t % 3 === 0) {
-    const s = (t % 4 === 0) ? -1 : 1;
-    decos.push({ z: zJ(), kind: 'img', img: pick(TREES), x: s * rnd(2.6, 3.2), hf: rnd(0.60, 0.72), flip: R() < 0.5 });
-    // 가끔 반대편 먼 밴드에 작은 나무 1그루로 깊이감(겹침 방지 위해 더 바깥)
-    if (chance(0.22)) decos.push({ z: zJ(), kind: 'img', img: pick(TREES), x: -s * rnd(3.8, 4.8), hf: rnd(0.4, 0.5), flip: R() < 0.5 });
+  // ── 꽃·잔디: 길 가장자리를 따라 좌우 대칭으로 이어지는 화단 띠 (4.4z 간격) ──
+  //   중심이 아니라 "안쪽 끝"을 B.edge 선에 맞춰 폭이 다른 스프라이트끼리도 줄이 맞는다.
+  //   좌측 사본은 flip 하므로 좌우가 정확히 거울 대칭이 되고 안쪽 끝도 같은 선에 놓인다.
+  if (t % 2 === 0) {
+    const k = t >> 1;
+    const flower = k % 2 === 0;
+    const img = flower ? FLW[k % FLW.length] : GRS[k % GRS.length];
+    const cx = B.edge + (DECO_INSET[img] || 0);
+    for (const s of [-1, 1])
+      decos.push({ z, kind: 'img', img, x: s * cx, hf: flower ? 0.15 : 0.16, flip: s < 0 });
   }
-  // ── 가로등: 나무 사이 · 도로 가까운 밴드(|x|≈1.85) · 좌우 번갈아 ──
+  // ── 가로등: 좌우 번갈아 (한쪽 기준 ≈17.6z) ──
   if (t % 4 === 1) {
-    const s = (t % 6 === 1) ? 1 : -1;
-    decos.push({ z: zJ(), kind: 'img', img: chance(0.5) ? 'lamp2' : 'lamp1', x: s * 1.85, hf: rnd(0.60, 0.68) });
+    const left = t % 8 === 1;
+    decos.push({ z, kind: 'img', img: left ? 'lamp1' : 'lamp2', x: (left ? 1 : -1) * B.lamp, hf: 0.64 });
   }
-  // ── 벤치: 가끔(≈15z) · 도로 옆 ──
-  if (t % 7 === 3) {
-    const s = (t % 14 === 3) ? -1 : 1;
-    decos.push({ z: zJ(), kind: 'img', img: s < 0 ? 'bench2' : 'bench1', x: s * rnd(2.0, 2.3), hf: rnd(0.24, 0.28) });
+  // ── 가로수: 좌우 번갈아 (한쪽 기준 ≈13.2z) · 종류는 순서대로 순환 ──
+  if (t % 3 === 0) {
+    const s = (t % 6 === 0) ? -1 : 1;
+    decos.push({ z, kind: 'img', img: TREES[((t / 3) | 0) % TREES.length], x: s * B.tree, hf: 0.66, flip: s < 0 });
   }
-  // ── 쓰레기통: 드물게(≈24z) ──
+  // ── 먼 나무: 바깥 밴드에 작게, 아주 가끔 (≈19.8z) → 깊이감만 ──
+  if (t % 9 === 4) {
+    const s = (t % 18 === 4) ? 1 : -1;
+    decos.push({ z, kind: 'img', img: TREES[((t / 9) | 0) % TREES.length], x: s * B.far, hf: 0.45, flip: s < 0 });
+  }
+  // ── 장식용 벤치는 두지 않는다: 점프로 넘는 '장애물 벤치'(obstacle_bench.png)와 생김새가 겹쳐
+  //    길가의 벤치를 피해야 할 장애물로 착각하게 만든다. bench1/bench2 스프라이트는 미사용.
+  // ── 쓰레기통 (≈48.4z) ──
   if (t % 11 === 6) {
     const s = (t % 22 === 6) ? 1 : -1;
-    decos.push({ z: zJ(), kind: 'img', img: 'trash', x: s * rnd(1.9, 2.2), hf: rnd(0.18, 0.22) });
+    decos.push({ z, kind: 'img', img: 'trash', x: s * B.prop, hf: 0.20 });
   }
-  // ── 비둘기: 아주 가끔, 지면 ──
-  if (t % 9 === 4 && chance(0.6)) {
-    const s = (R() < 0.5 ? -1 : 1);
-    decos.push({ z: zJ(), kind: 'img', img: pick(['pigeon1', 'pigeon3']), x: s * rnd(1.9, 3.0), hf: rnd(0.12, 0.16), flip: R() < 0.5 });
-  }
-  // ── 꽃/잔디: 빈 잔디를 낮은 밀도로 자연스럽게 채움(작게) ──
-  if (chance(0.7)) {
-    const s = (R() < 0.5 ? -1 : 1);
-    const flower = R() < 0.5;
-    decos.push({
-      z: zJ(), kind: 'img', img: flower ? pick(FLW) : pick(GRS),
-      x: s * rnd(1.7, 3.8), hf: flower ? rnd(0.12, 0.17) : rnd(0.13, 0.19),
-      flip: R() < 0.5, rot: (R() - 0.5) * 0.1
-    });
+  // ── 비둘기 (≈57.2z) ──
+  if (t % 13 === 5) {
+    const s = (t % 26 === 5) ? -1 : 1;
+    decos.push({ z, kind: 'img', img: s < 0 ? 'pigeon1' : 'pigeon3', x: s * B.bird, hf: 0.14, flip: s > 0 });
   }
 }
 
@@ -216,7 +235,7 @@ function updateIntro(dt) {
     for (const d of decos) d.z -= dz;
     decos = decos.filter(d => d.z > -2);
     nextDecoZ -= dz;
-    while (nextDecoZ < DRAW_FAR) { spawnDeco(DRAW_FAR); nextDecoZ += 2.2; }
+    while (nextDecoZ < DRAW_FAR) { spawnDeco(nextDecoZ); nextDecoZ += 2.2; }
   }
   if (T >= 3.7) startPlay();
 }
@@ -275,7 +294,7 @@ function update(dt) {
     spawnPattern(DRAW_FAR + (DRAW_FAR - nextSpawnZ));
     nextSpawnZ += 16 + Math.random() * 10 + state.speed * 0.35; // breathing room between patterns
   }
-  while (nextDecoZ < DRAW_FAR) { spawnDeco(DRAW_FAR); nextDecoZ += 2.2; }
+  while (nextDecoZ < DRAW_FAR) { spawnDeco(nextDecoZ); nextDecoZ += 2.2; }
 
   // collisions (player at z≈PLAYER_Z) — 무적 중에는 통과
   // ⚠️ 판정 창(폭 1.5)을 "현재 z"로만 보면, 한 프레임 이동량 dz 가 창보다 커질 때

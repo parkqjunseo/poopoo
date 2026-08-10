@@ -74,22 +74,33 @@
     
   </div>
 
-  <!-- 모달: 조작법 -->
+  <!-- 모달: 조작법 (how_box.png = 안내가 전부 그려진 통짜 아트 · 기록 모달과 같은 틀) -->
   <div id="controlsPanel" class="modal">
-    <div class="howtoWrap">
-      <img class="howtoArt" src="howtoplay.png" alt="조작법 안내">
-      <button id="controlsClose" class="howtoClose" aria-label="닫기">
+    <div class="boxWrap">
+      <img class="boxArt" src="how_box.png" alt="조작법 안내">
+      <button id="controlsClose" class="boxClose" aria-label="닫기">
         <img src="close-button.png" alt="">
       </button>
     </div>
   </div>
 
-  <!-- 모달: 기록 -->
+  <!-- 모달: 기록 (record_box.png = 캐릭터·라벨·문구가 그려진 통짜 아트 + 값 오버레이) -->
   <div id="recordsPanel" class="modal">
-    <div class="modalCard">
-      <div class="modalTitle">최고 기록</div>
-      <div id="recBody" class="recBody">아직 기록이 없어요!</div>
-      <button id="recordsClose" class="pill pill-yellow pill-wide">확인</button>
+    <div class="boxWrap">
+      <img class="boxArt" src="record_box.png" alt="최고 기록">
+
+      <!-- 아트의 빈 슬롯 위에 실제 값 오버레이 -->
+      <div class="recScore" id="recScore">0</div>
+      <div class="recVal recValCoin" id="recCoins">-</div>
+      <div class="recVal recValDate" id="recDate">-</div>
+      <div class="recVal recValTime" id="recTime">-</div>
+
+      <!-- 기록이 없을 때만 점수 자리에 뜨는 안내 (id는 기존 코드가 참조하므로 유지) -->
+      <div id="recBody" class="recEmpty hidden">아직 기록이 없어요!</div>
+
+      <button id="recordsClose" class="boxClose" aria-label="닫기">
+        <img src="close-button.png" alt="">
+      </button>
     </div>
   </div>
 </div>

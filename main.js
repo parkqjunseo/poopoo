@@ -31,11 +31,19 @@
 
   // ui.js와 동일 키 사용 (기록 따로 노는 문제 방지)
   function bestScore(){ try { return +(localStorage.getItem('poopoo_best_score')||0); } catch(e){ return 0; } }
+  // record_box.png 아트의 빈 슬롯에 값을 채운다 (기록 저장·포맷은 ui.js 소관)
   function showRecords(){
-    if(!recBody) return;
-    var bs=bestScore(), bd=(typeof state!=='undefined'?state.best:0);
-    recBody.innerHTML = bs ? ('👑 최고 점수<br><b>'+bs.toLocaleString()+' 점</b><br><br>🏁 최고 거리 <b>'+bd+' m</b>')
-                           : '아직 기록이 없어요!<br>먼저 한 판 도망쳐 보세요 🚽';
+    var r = (typeof getRecords==='function') ? getRecords()
+                                             : { score:bestScore(), coins:0, at:0, playMs:0 };
+    var set=function(id,v){ var el=byId(id); if(el) el.textContent=v; };
+    var has = r.score > 0;
+    set('recScore', has ? r.score.toLocaleString() : '');
+    // 휴지 0개로 세운 기록도 "0 개" 로 보여야 한다 (0 을 falsy 로 걸러 "-" 가 뜨던 문제)
+    set('recCoins', has ? r.coins.toLocaleString()+' 개' : '-');
+    set('recDate',  r.at && typeof recFmtDate==='function' ? recFmtDate(r.at) : '-');
+    set('recTime',  r.playMs && typeof recFmtPlay==='function' ? recFmtPlay(r.playMs) : '-');
+    // 기록이 하나도 없으면 점수 자리에 안내 문구를 대신 보여준다
+    if(recBody) recBody.classList.toggle('hidden', has);
   }
 
   function sync(){

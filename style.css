@@ -241,8 +241,79 @@ canvas#game {
   font-family: 'Jua', sans-serif; color: #7a4f1c; font-size: clamp(12px, 2.6vw, 15px);
 }
 .key span { color: #b08a4a; }
-.recBody { font-family: 'Jua', sans-serif; color: #7a4f1c; font-size: clamp(15px, 3.4vw, 20px); line-height: 1.6; padding: 12px 0; }
-.recBody b { color: #b96f22; font-size: 1.3em; }
+/* ---------- 판때기 모달 공용 틀 (기록 record_box.png · 조작법 how_box.png) ----------
+   두 아트는 크기(2048×3072)와 카드 모서리 위치가 완전히 동일해서 같은 규칙을 공유한다.
+   게임오버 화면(.goPanel/.slot)과 같은 방식: 아트를 container 로 만들고 그 위에 값을 얹되,
+   위치·글자 크기를 모두 카드 기준(cqw/cqh)으로 잡아 어느 화면에서도 안 틀어지게 한다.
+   좌표는 PNG 알파/색 실측값. 🔧 미세조정은 이 % 값만 건드리면 됨.
+     카드 본체 x 17.38~82.08% · y 15.43~85.64%
+     (기록) 점수 흰 박스 y중심 40.9% / 행 y중심: 휴지 53.7% · 일시 60.0% · 시간 66.5% */
+.boxWrap{
+  position: relative; container-type: size;
+  aspect-ratio: 2048 / 3072;
+  height: min(88dvh, calc(88vw * 3072 / 2048));
+  /* ⚠️ flex 가 폭을 줄이면 wrap 의 비율이 깨지고, object-fit:contain 인 아트가 레터박스되면서
+     % 로 잡아둔 값 슬롯이 그림과 어긋난다. 줄이지 못하게 고정. */
+  flex: none;
+  animation: howtoPop .3s cubic-bezier(.2,1.25,.4,1) both;
+}
+.boxArt{
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  filter: drop-shadow(0 1.5cqh 2.2cqh rgba(0,0,0,.35));
+}
+/* 최고 점수 — 흰 박스 정중앙 */
+.recScore{
+  position: absolute; z-index: 3; left: 50%; top: 40.9%;
+  transform: translate(-50%,-50%); white-space: nowrap; line-height: 1;
+  font-family: 'Titan One','Jua',sans-serif; font-size: 13cqw; color: #e0632a;
+  text-shadow: 0 .3cqh 0 #fff, 0 1.5cqh 1cqh rgba(150,70,10,.25);
+}
+/* 아래 3행의 값 — 라벨 반대쪽(우측)에 오른쪽 정렬.
+   ⚠️ 행의 실제 폭은 구분선 기준 25.78%~74.22% (좌우 대칭, 알파 실측).
+      카드 안쪽 테두리가 79.9% 에 있어 이걸 행 끝으로 착각하기 쉬운데 그러면 값이 칸 밖으로 나간다.
+      라벨이 구분선 시작에서 3.4% 안쪽(29.1%)에서 시작하므로, 값도 같은 여백을 줘 74.22-3.4 = 70.8% 에서 끝낸다.
+      → right: 29.2%  (=100-70.8)
+   글자 크기 3.6cqw 는 가장 긴 값들("1,234 개" · "2026.08.10" · "12시간 45분")이
+   모두 라벨 끝(최대 49.6%)을 넘지 않는 선에서 정한 값. 세 행을 같은 크기로 맞췄다. */
+.recVal{
+  position: absolute; z-index: 3; right: 29.2%;
+  transform: translateY(-50%); white-space: nowrap; line-height: 1;
+  font-family: 'Jua', sans-serif; font-size: 3.6cqw; color: #8a5a2a;
+  text-shadow: 0 1px 0 rgba(255,255,255,.8);
+}
+.recValCoin{ top: 53.7%; }
+.recValDate{ top: 60.0%; }
+.recValTime{ top: 66.5%; }
+/* 기록이 없을 때 점수 자리에 뜨는 안내 */
+.recEmpty{
+  position: absolute; z-index: 3; left: 50%; top: 40.9%;
+  transform: translate(-50%,-50%); white-space: nowrap;
+  font-family: 'Jua', sans-serif; font-size: 4.6cqw; color: #b08a4a;
+}
+/* X 버튼 — 카드 우상단 모서리(82.08%, 15.43%)에 걸치게. 두 모달 공용 */
+.boxClose{
+  position: absolute; z-index: 4; left: 82.08%; top: 15.43%;
+  transform: translate(-38%,-38%);
+  width: 10cqw; aspect-ratio: 382 / 574;
+  background: none; border: 0; padding: 0; cursor: pointer; line-height: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .08s ease, filter .08s ease;
+}
+.boxClose img{ width: 100%; height: 100%; object-fit: contain; display: block; }
+.boxClose:active{ transform: translate(-38%,-38%) scale(.92); }
+
+/* 조작법은 안내 글자가 5줄이라 기록판보다 크게 띄운다.
+   ⚠️ PNG 안에서 카드 본체는 가로 17.38~82.08% · 세로 8.92~85.64% 뿐이고 나머지는 투명 여백이다.
+      이미지를 화면에 맞추면 정작 카드는 그만큼 작아 보이므로, 카드가 화면을 채우도록 역산한다.
+      (남는 투명 여백은 화면 밖으로 넘겨 overflow:hidden 으로 잘라낸다 — 없으면 스크롤바가 생김)
+   ⚠️ 기준은 "카드 폭"이 아니라 이미지 중심에서 가장 먼 내용까지의 거리다. 내용이 중심에서
+      한쪽으로 치우쳐 있어서 폭으로 잡으면 튀어나온 쪽이 잘린다. 실제로 X 버튼이 잘렸다.
+        가로: X 버튼 오른쪽 끝 88.28% 가 가장 멀다 → 반폭 38.28% → 나누는 값 0.7656
+        세로: 캐릭터 머리 8.92% 가 가장 멀다   → 반높이 41.08% → 나누는 값 0.8216 */
+#controlsPanel{ padding: 0; overflow: hidden; }
+#controlsPanel .boxWrap{
+  height: min(calc(96dvh / .8216), calc(96vw * 3072 / 2048 / .7656));
+}
 
 .hidden { display: none !important; }
 
