@@ -1,7 +1,3 @@
-# POOPOO RUN
-
-3레인 무한 러너 웹 게임입니다.
-
 ## Project structure
 
 ```text
@@ -26,11 +22,3 @@ assets/
     ui/                # 버튼·패널 등 UI 이미지
   reference/           # 원본 디자인 참고 이미지
 ```
-
-## Run locally
-
-```bash
-python -m http.server 8321
-```
-
-Open `http://localhost:8321/` in a browser.
